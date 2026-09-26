@@ -1,0 +1,19 @@
+Create a full-screen NIMORI desktop APP mockup, exactly 1536×1024, matching a premium red molded-console interface. Orthographic screenshot, edge-to-edge app shell; no browser chrome, external device frame or landing-page composition.
+
+Use dominant console-red #E60211 plastic, cream #FEF3D5 typography and controls, burgundy #6A0200 recessed borders, amber #F3AE15 wordmark extrusion, orange #FF7A1A LEDs and near-black #0B0B0B display interiors. Gentle upper-left product lighting; tactile but shallow bevels. Data remains flat and exceptionally legible. Bold rounded sans-serif headings, clear sans-serif labels, tabular numerals. No Nintendo branding or recognizable hardware.
+
+Fixed left rail x0–216: dimensional custom “NIMORI” wordmark; navigation “Lobby”, “Session”, “Unplug”, “Arcade”, “Docs”. Session selected in cream. Main workspace x248–1504.
+
+Top bar y32–100: “Session”, small “DEMO” tag, “Simulated data”, network “Robinhood Chain · 4663”, outlined wallet chip “0x71…04C2”.
+
+At y128: large “ETH / NIMORI”, adjacent “Easy · Full range” pill. Small supporting label: “One position · Two Seat NFTs”.
+
+Left column x248–744, y208–774: a large cream save-file card seated in a red cartridge-like recess, an original generic shape. Printed labels: “SAVE FILE”, “Seat #014”, “1P · ETH”, “Your Seat NFT”. Include a bold abstract two-port emblem, subtle amber foil border and small “Transferable” label. Secondary outlined button below: “View seat”.
+
+Right column x776–1504: connection panel y208–470. Two distinct generic round ports, both visibly occupied by cream cable plugs. Short cables curve within this panel only. Two orange LEDs glow. Labels: “1P · You”, “2P · Partner”, and centered “Both connected”.
+
+Below, y494–650: two equal recessed statistic tiles. “Fee split” with large “50 / 50”; “Time played” with large “26h 14m”.
+
+Exit panel y674–842: “Unplug available”, supporting “24h minimum reached”, prominent cream “Unplug” button. Keep the action deliberate, not alarming.
+
+Bottom full-width warning inset: “1P repayment depends on position value.” Then “Below ~−75% token price, repayment is capped.” Do not imply guaranteed protection, real deployment, returns or an audit.

@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NIMORI · co-op liquidity</title>
+<meta name="description" content="Co-op liquidity on Robinhood Chain. You bring ETH, player 2 brings the token. Demo mockup, simulated data.">
+<link rel="icon" href="img/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Titan+One&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css?v=4">
+</head>
+<body data-screen="lobby">
+
+<!-- full-bleed renders, one per screen -->
+<div class="stage" aria-hidden="true">
+  <img class="bg bg-lobby" src="img/lobby.jpg" alt="">
+  <img class="bg bg-session" src="img/session.jpg" alt="">
+  <img class="bg bg-arcade" src="img/arcade.jpg" alt="">
+  <img class="bg bg-docs" src="img/docs.jpg" alt="">
+  <div class="scrim"></div>
+</div>
+
+<header class="topbar">
+  <a class="wordmark" href="#lobby" aria-label="NIMORI home">NIMORI</a>
+  <nav class="tabs" aria-label="Screens">
+    <a href="#lobby" data-tab="lobby">Lobby</a>
+    <a href="#session" data-tab="session">Session</a>
+    <a href="#arcade" data-tab="arcade">Arcade</a>
+    <a href="#docs" data-tab="docs">Docs</a>
+  </nav>
+  <div class="meta">
+    <span class="chip chain"><i class="dot"></i>Robinhood Chain</span>
+    <span class="chip demo" title="Contracts are not deployed. Every number on this page is simulated.">DEMO · simulated data</span>
+    <button class="btn btn-cream connect" id="connect">Connect wallet</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ============ LOBBY ============ -->
+<section class="screen" id="screen-lobby" data-screen="lobby" aria-labelledby="h-lobby">
+  <div class="hero-caption">
+    <p class="kicker">Lobby · ETH / NIMORI</p>
+    <p class="wait">waiting for player 2 <span class="pips" aria-hidden="true"><b></b><b></b><b></b><i></i><i></i></span></p>
+  </div>
+
+  <div class="panel panel-right">
+    <div class="panel-head">
+      <h1 id="h-lobby">Lobby</h1>
+      <label class="select">
+        <span class="sr">Pair</span>
+        <select id="pair">
+          <option value="NIMORI">ETH / NIMORI</option>
+          <option value="USDG">ETH / USDG</option>
+        </select>
+      </label>
+    </div>
+    <p class="lede">You bring ETH, player 2 brings the token. You wait here until the other queue can match you.</p>
+
+    <div class="queues" aria-label="Queue depth">
+      <div class="q q1">
+        <div class="q-top"><span class="badge b1">1P</span><span class="q-asset">ETH queue</span></div>
+        <div class="meter" id="m1"></div>
+        <div class="q-num"><b id="q1v">12.40 ETH</b><span id="q1n">7 deposits</span></div>
+      </div>
+      <div class="q q2">
+        <div class="q-top"><span class="badge b2">2P</span><span class="q-asset" id="q2label">NIMORI queue</span></div>
+        <div class="meter" id="m2"></div>
+        <div class="q-num"><b id="q2v">≈ 4.10 ETH</b><span id="q2n">3 deposits</span></div>
+      </div>
+    </div>
+
+    <fieldset class="field">
+      <legend>Play as</legend>
+      <div class="seg" role="radiogroup" id="side">
+        <button role="radio" aria-checked="true" data-v="1P"><span class="badge b1">1P</span> ETH</button>
+        <button role="radio" aria-checked="false" data-v="2P"><span class="badge b2">2P</span> <span class="tok">NIMORI</span></button>
+      </div>
+    </fieldset>
+
+    <fieldset class="field">
+      <legend>Difficulty</legend>
+      <div class="seg seg3" role="radiogroup" id="diff">
+        <button role="radio" aria-checked="true" data-v="easy">Easy</button>
+        <button role="radio" aria-checked="false" data-v="normal">Normal</button>
+        <button role="radio" aria-checked="false" data-v="hard">Hard</button>
+      </div>
+      <p class="hint" id="diffHint">Full range. Lowest fees, lowest IL. Never out of range.</p>
+    </fieldset>
+
+    <label class="field amount">
+      <span class="legend">Deposit</span>
+      <span class="input">
+        <input id="amt" inputmode="decimal" value="1.00" aria-label="Deposit amount">
+        <span class="unit" id="unit">ETH</span>
+        <button class="max" type="button" id="max">MAX</button>
+      </span>
+      <span class="hint">Demo balance: <b id="bal">3.2000 ETH</b> · waiting earns nothing, withdraw free anytime</span>
+    </label>
+
+    <dl class="facts">
+      <div><dt>Your place in queue</dt><dd id="place">#8 of 8</dd></div>
+      <div><dt>Expected fee split</dt><dd id="split">50 / 50</dd></div>
+    </dl>
+
+    <button class="btn btn-red wide" id="deposit">Plug in as 1P</button>
+    <p class="risk"><b>Risk.</b> <span id="riskCopy">As 1P you get your ETH back at unplug <em>as long as the position covers it</em>. If the token falls hard (around −75% or more), the cap applies and you get less.</span></p>
+  </div>
+</section>
+
+<!-- ============ SESSION ============ -->
+<section class="screen" id="screen-session" data-screen="session" aria-labelledby="h-session">
+  <div class="hero-caption right">
+    <p class="kicker">Session live</p>
+    <p class="wait">2 players connected <span class="pips full" aria-hidden="true"><b></b><b></b><b></b><b></b><b></b></span></p>
+  </div>
+
+  <div class="panel panel-left">
+    <div class="panel-head">
+      <h1 id="h-session">Session</h1>
+      <div class="seg mini" role="radiogroup" id="age" aria-label="Demo: session age">
+        <button role="radio" aria-checked="false" data-v="11">11 h</button>
+        <button role="radio" aria-checked="true" data-v="31">31 h</button>
+      </div>
+    </div>
+
+    <article class="savefile" aria-label="Seat NFT">
+      <div class="sf-rail"><span>SAVE FILE</span></div>
+      <div class="sf-body">
+        <div class="sf-top">
+          <span class="badge b1">1P</span>
+          <b>Seat #0042</b>
+          <span class="sf-diff">Normal</span>
+        </div>
+        <div class="sf-grid">
+          <div><span>Deposit</span><b>1.000 ETH</b></div>
+          <div><span>Partner</span><b>2P · Seat #0043</b></div>
+          <div><span>Entry ETH</span><b>$2,000</b></div>
+          <div><span>Entry NIMORI</span><b>$0.100</b></div>
+        </div>
+        <p class="sf-foot">ERC-721 · tradable. The buyer inherits the session.</p>
+      </div>
+    </article>
+
+    <div class="split">
+      <div class="split-head"><span>Fee split</span><b>55 / 45</b></div>
+      <div class="split-bar"><i style="width:55%"></i></div>
+      <div class="split-leg"><span><span class="badge b1">1P</span> 55% (seat bonus)</span><span>45% <span class="badge b2">2P</span></span></div>
+      <p class="hint">10% of trading fees go to Arcade stakers before the split.</p>
+    </div>
+
+    <dl class="facts">
+      <div><dt>Fees accrued (your seat)</dt><dd>0.0184 ETH + 402 NIMORI</dd></div>
+      <div><dt>Price move since entry</dt><dd>ETH +2.1% · NIMORI +18.4%</dd></div>
+      <div><dt>Mover</dt><dd>NIMORI (2P carries the IL)</dd></div>
+      <div><dt>Session age</dt><dd id="ageV">31 h · unplug open</dd></div>
+    </dl>
+
+    <p class="payout" id="payout">If you unplug now: <b>1.000 ETH</b> + your fees, <em>as long as the position covers it</em>. If a 1P is waiting in the lobby, they hot swap into your seat and the position stays open for your partner.</p>
+
+    <div class="actions">
+      <button class="btn btn-red" id="unplug">Unplug</button>
+      <button class="btn btn-ghost" id="ragequit" disabled>Rage quit</button>
+    </div>
+    <p class="hint" id="rqHint">Rage quit only exists before 24 h: 1% of seat value is paid to your partner.</p>
+  </div>
+</section>
+
+<!-- ============ ARCADE ============ -->
+<section class="screen" id="screen-arcade" data-screen="arcade" aria-labelledby="h-arcade">
+  <div class="hero-caption">
+    <p class="kicker">$NIMORI · launched on Pons</p>
+    <p class="wait">insert token to continue</p>
+  </div>
+
+  <div class="panel panel-right">
+    <div class="panel-head">
+      <h1 id="h-arcade">Arcade</h1>
+      <span class="chip small">Stake $NIMORI</span>
+    </div>
+    <p class="lede">Stakers are the house crew: they get a cut of every co-op session, skip ahead in the lobby, and choose which pairs open.</p>
+
+    <ul class="perks">
+      <li><b>10%</b><span>of all co-op trading fees, paid in ETH and pair tokens</span></li>
+      <li><b>Priority</b><span>staked players are matched first in their queue</span></li>
+      <li><b>Votes</b><span>stakers decide which pairs get a lobby</span></li>
+    </ul>
+
+    <label class="field amount">
+      <span class="legend">Stake</span>
+      <span class="input">
+        <input id="stakeAmt" inputmode="decimal" value="25,000" aria-label="Stake amount">
+        <span class="unit">NIMORI</span>
+        <button class="max" type="button">MAX</button>
+      </span>
+      <span class="hint">Demo balance: <b>120,000 NIMORI</b> · staked: <b id="staked">0</b></span>
+    </label>
+    <button class="btn btn-red wide" id="stake">Stake</button>
+
+    <div class="votes">
+      <p class="legend">Next lobby vote</p>
+      <div class="vote"><span>ETH / USDG</span><div class="vbar"><i style="width:46%"></i></div><b>46%</b></div>
+      <div class="vote"><span>ETH / NIMORI Hard</span><div class="vbar"><i style="width:31%"></i></div><b>31%</b></div>
+      <div class="vote"><span>Keep as is</span><div class="vbar"><i style="width:23%"></i></div><b>23%</b></div>
+    </div>
+    <p class="risk"><b>No snapshot, no pre-launch tier.</b> Rewards depend on real trading volume; none are shown here because nothing is live yet.</p>
+  </div>
+</section>
+
+<!-- ============ DOCS ============ -->
+<section class="screen" id="screen-docs" data-screen="docs" aria-labelledby="h-docs">
+  <article class="panel panel-center docs">
+    <p class="kicker dark">Manual</p>
+    <h1 id="h-docs">How to play NIMORI</h1>
+    <p class="lede">Providing liquidity has always been a solo game: you need both sides of a pair. NIMORI makes it a two-player mode. One asset per player, one Uniswap v4 position, two seats.</p>
+
+    <nav class="toc" aria-label="Contents">
+      <a href="#d-lobby">Lobby</a><a href="#d-diff">Difficulty</a><a href="#d-session">Session</a><a href="#d-unplug">Unplug</a><a href="#d-example">Example</a><a href="#d-risks">Risks</a><a href="#d-params">Parameters</a>
+    </nav>
+
+    <h2 id="d-lobby">1 · The lobby</h2>
+    <p>Each pair has two queues. <b>1P</b> deposits ETH, <b>2P</b> deposits the token. A deposit waits until the other side can match it, FIFO by value, at the pool price (TWAP checked against spot). Waiting earns nothing and can be withdrawn anytime, free. If sizes differ, the larger deposit is partly filled and the rest stays queued.</p>
+
+    <h2 id="d-diff">2 · Difficulty</h2>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Mode</th><th>Range</th><th>Fees</th><th>Risk</th></tr></thead>
+        <tbody>
+          <tr><td>Easy</td><td>Full range</td><td>Lower</td><td>Lowest IL</td></tr>
+          <tr><td>Normal</td><td>Wide around spot</td><td>Medium</td><td>Medium IL</td></tr>
+          <tr><td>Hard</td><td>Narrow around spot</td><td>Highest</td><td>Highest IL, can go out of range</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>You are only matched with a player on the same difficulty.</p>
+
+    <h2 id="d-session">3 · The session</h2>
+    <p>A match opens one v4 position and mints two <b>Seat NFTs</b>, 1P and 2P. A seat is a save file: it stores side, difficulty, entry prices and the fee split, and it can be sold. Fees split 50 / 50 by default; the scarce side can get a <b>seat bonus</b> up to 70 / 30. 10% of trading fees go to Arcade stakers first.</p>
+
+    <h2 id="d-unplug">4 · Unplug, hot swap, rage quit</h2>
+    <p>After 24 h either player can <b>unplug</b>. The <b>mover rule</b> applies: the asset whose USD price moved more is the mover. The non-mover gets back exactly what they deposited, in their own asset, <b>as long as the position covers it</b>. The mover gets the rest. Fees are added on top.</p>
+    <p>If someone is waiting on the same side and difficulty, they <b>hot swap</b> into the empty seat and the position stays open. Leaving before 24 h is a <b>rage quit</b>: 1% of seat value goes to your partner.</p>
+
+    <h2 id="d-example">5 · Worked example</h2>
+    <p>ETH $2,000, token $0.10, Easy. 1P deposits 1 ETH, 2P deposits 20,000 tokens. Position $4,000.</p>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Case</th><th>Position</th><th>1P gets</th><th>2P gets</th></tr></thead>
+        <tbody>
+          <tr><td>Token ×2</td><td>$5,656.85</td><td>$2,000 (1 ETH)</td><td>$3,656.85</td></tr>
+          <tr><td>Token ÷2</td><td>$2,828.43</td><td>$2,000 (1 ETH)</td><td>$828.43</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Fees are added in both cases. In a much deeper token crash (around −75%) the position no longer covers the 1P deposit and the cap applies: 1P receives the whole position, which is less than 1 ETH.</p>
+
+    <h2 id="d-risks">6 · Risks</h2>
+    <ul>
+      <li><b>Smart contract risk.</b> Code can have bugs. Contracts are not deployed; audits will be published before launch.</li>
+      <li><b>Mover risk.</b> If your asset moves more than your partner's, you carry the IL.</li>
+      <li><b>Coverage cap.</b> The non-mover is repaid only as long as the position covers it.</li>
+      <li><b>Range risk (Hard).</b> Narrow positions can go out of range and stop earning.</li>
+      <li><b>Oracle risk.</b> Bad price data could misassign IL. Mitigated by TWAP checks and staleness guards.</li>
+      <li><b>Lobby wait.</b> If the other queue is empty, your deposit earns nothing.</li>
+    </ul>
+
+    <h2 id="d-params">7 · Parameters</h2>
+    <dl class="facts">
+      <div><dt>Chain</dt><dd>Robinhood Chain (4663)</dd></div>
+      <div><dt>AMM</dt><dd>Uniswap v4</dd></div>
+      <div><dt>Minimum session</dt><dd>24 h</dd></div>
+      <div><dt>Rage quit</dt><dd>1% of seat value, to partner</dd></div>
+      <div><dt>Fee split</dt><dd>50 / 50, max bonus 70 / 30</dd></div>
+      <div><dt>Protocol fee</dt><dd>10% of trading fees</dd></div>
+      <div><dt>$NIMORI</dt><dd>Launched on Pons</dd></div>
+    </dl>
+    <p class="end">waiting for player 2...</p>
+  </article>
+</section>
+
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="js/app.js?v=3"></script>
+</body>
+</html>

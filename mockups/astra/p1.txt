@@ -1,0 +1,17 @@
+Create a polished, full-screen desktop web APP mockup for NIMORI, exactly 1536×1024. Straight-on interface screenshot, not a website landing page, not a device photographed on a desk. Render sharp English typography and functional controls.
+
+Art direction: saturated console-red #E60211 molded-plastic app shell, cream #FEF3D5 lettering, burgundy #6A0200 seams, amber #F3AE15 dimensional edges, warm orange #FF7A1A indicator lights. Near-black #0B0B0B only inside recessed displays. Soft upper-left studio lighting, subtle plastic grain, restrained bevels. No Nintendo logos or recognizable Nintendo hardware.
+
+Layout: fixed 216px left rail; main workspace begins at x248 and ends at x1504. Rail contains a chunky custom cream “NIMORI” wordmark with amber extrusion and burgundy outline. Below, vertically spaced navigation: “Lobby”, “Session”, “Unplug”, “Arcade”, “Docs”. Lobby is selected with a cream molded tab.
+
+Top workspace bar, y32–100: “Lobby” left; small “DEMO” tag and “Simulated data” centrally; “Robinhood Chain · 4663” and a cream “Connect wallet” button right.
+
+Pair selector spans y128–216: large “ETH / NIMORI”, small “Choose pair”, clear dropdown chevron.
+
+Below, two queue bays occupy x248–1040, y240–620; deposit panel occupies x1064–1504, y240–848. Queue bays have equal width. Left: “1P”, “Bring ETH”, “3 waiting”. Right: “2P”, “Bring NIMORI”, “1 waiting”. Show three simple numbered queue slots versus one occupied slot and two outlined empty slots. Footer labels: “FIFO by value” and “Withdraw freely before match”.
+
+Deposit panel: “Join queue”, segmented “1P · ETH” selected / “2P · NIMORI”, “Amount”, “0.10 ETH”, then “Difficulty” with “Easy”, “Normal”, “Hard”. Easy selected. Compact legend: “Full range / Wide / Narrow”. Large cream button: “Connect to deposit”.
+
+Under queue bays: a shallow molded strip reading “Two players. One position.” with two generic circular port symbols.
+
+Bottom cream inset warning: “1P repayment depends on position value.” Second line: “Below ~−75% token price, repayment is capped.” Keep warnings legible. No charts, invented APR, audit badges or marketing hero.

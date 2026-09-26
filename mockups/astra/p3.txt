@@ -1,0 +1,15 @@
+Create a portrait mobile NIMORI APP screenshot, exactly 1024×1536. This is a responsive Lobby interface, not a phone photographed in space. Fill the canvas; no device bezel, browser chrome, horizontal scrolling or desktop sidebar. Compose as a compact 390px-wide logical viewport enlarged for rendering.
+
+Use saturated console-red #E60211 molded plastic as the dominant background. Cream #FEF3D5 controls and lettering, burgundy #6A0200 seams, amber #F3AE15 dimensional accents, warm orange #FF7A1A LEDs, near-black #0B0B0B recessed displays. Soft upper-left lighting, shallow realistic bevels, restrained grain. Chunky custom wordmark; clean rounded sans-serif UI, large readable numerals. No Nintendo logos or recognizable Nintendo hardware.
+
+Use 48px horizontal margins and generous touch targets. Header y36–152: dimensional “NIMORI” left, small “DEMO” tag with “Simulated data” right. Next row y174–248: “Lobby” left, cream “Connect” button right. Small network line: “Robinhood Chain · 4663”.
+
+Pair selector y280–390: cream inset with large “ETH / NIMORI” and a dropdown chevron.
+
+Queue section y414–644: two equal recessed bays side by side, separated by 24px. Left labels “1P”, “Bring ETH”, “3 waiting”; right “2P”, “Bring NIMORI”, “1 waiting”. Use tiny numbered queue blocks and orange occupancy lights, not avatars or charts. Beneath, one shared line: “FIFO by value · Withdraw before match”.
+
+Deposit section y710–1184: molded red panel with cream-edged controls. “Join queue”; segmented selector “1P · ETH” selected and “2P · NIMORI”; amount field “0.10 ETH”. “Difficulty” above three equal buttons: “Easy”, “Normal”, “Hard”. Easy selected. Small descriptions beneath: “Full”, “Wide”, “Narrow”. Full-width cream action: “Connect to deposit”.
+
+Warning area y1210–1360, cream text on burgundy: “1P repayment depends on position value.” Then “Below ~−75% token price, repayment is capped.” Set warning text at least 32 image pixels.
+
+Bottom navigation y1400–1536: “Lobby”, “Session”, “Unplug”, “Arcade”, “Docs”, with simple original icons; Lobby highlighted cream. Keep every control visible, aligned and unobstructed.
