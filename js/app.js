@@ -33,37 +33,43 @@ function buildScreen() {
   const el = document.createElement('div');
   el.className = 'crt';
   el.innerHTML = `
-    <div class="crt-in">
-      <div class="crt-top"><span class="crt-title">ARCADE</span><span class="crt-tag">DEMO · SIMULATED</span></div>
-      <div class="crt-tabs" role="group" aria-label="Stake or unstake">
-        <button type="button" data-smode="stake" aria-pressed="true">STAKE</button>
-        <button type="button" data-smode="unstake" aria-pressed="false">UNSTAKE</button>
+    <div class="crt-bar"><span>NIMORI OS</span><span data-crt-route></span><span class="crt-tag">DEMO · SIMULATED</span></div>
+    <div class="crt-body" data-crt-body tabindex="-1"></div>`;
+  return el;
+}
+// LCD stake widget: lives inside the Arcade page (on the console screen on desktop, in the panel on phones)
+function stakeWidget() {
+  const staking = STAKE.mode === 'stake';
+  return `
+    <div class="lcd">
+      <div class="lcd-tabs" role="group" aria-label="Stake or unstake">
+        <button type="button" data-smode="stake" aria-pressed="${staking}">STAKE</button>
+        <button type="button" data-smode="unstake" aria-pressed="${!staking}">UNSTAKE</button>
       </div>
-      <label class="crt-field">
+      <label class="lcd-field">
         <input inputmode="decimal" placeholder="0" aria-label="Amount of NIMORI" data-samt>
         <span>NIMORI</span>
         <button type="button" data-smax>MAX</button>
       </label>
-      <div class="crt-stats">
-        <div><small>WALLET</small><b data-swallet></b></div>
-        <div><small>STAKED</small><b data-sstaked></b></div>
-        <div><small>PRIORITY PASS</small><b data-spass></b></div>
+      <div class="lcd-stats">
+        <div><small>WALLET</small><b>${fmt(STAKE.wallet)}</b></div>
+        <div><small>STAKED</small><b>${fmt(STAKE.staked)}</b></div>
+        <div><small>PRIORITY PASS</small><b class="${STAKE.staked > 0 ? 'on' : ''}">${STAKE.staked > 0 ? 'ON' : 'OFF'}</b></div>
       </div>
-      <button type="button" class="crt-go" data-sgo>▶ INSERT COIN</button>
+      <button type="button" class="lcd-go" data-sgo>${staking ? '▶ INSERT COIN' : '◀ CASH OUT'}</button>
     </div>`;
-  const amt = el.querySelector('[data-samt]');
-  el.querySelectorAll('[data-smode]').forEach((b) => b.addEventListener('click', () => {
-    STAKE.mode = b.dataset.smode; amt.value = ''; paintScreen(el);
-  }));
-  el.querySelector('[data-smax]').addEventListener('click', () => {
-    amt.value = String(STAKE.mode === 'stake' ? STAKE.wallet : STAKE.staked);
-  });
-  el.querySelector('[data-sgo]').addEventListener('click', () => {
+}
+function bindStake(root) {
+  const amt = $('[data-samt]', root);
+  if (!amt) return;
+  $$('[data-smode]', root).forEach((b) => b.addEventListener('click', () => { STAKE.mode = b.dataset.smode; render(); }));
+  $('[data-smax]', root).addEventListener('click', () => { amt.value = String(STAKE.mode === 'stake' ? STAKE.wallet : STAKE.staked); });
+  $('[data-sgo]', root).addEventListener('click', () => {
     const n = parseFloat((amt.value || '').replace(/[^\d.]/g, ''));
-    const cap = STAKE.mode === 'stake' ? STAKE.wallet : STAKE.staked;
-    if (!(n > 0)) { toast('Enter an amount on the screen.'); return; }
-    if (n > cap) { toast(STAKE.mode === 'stake' ? 'Not enough NIMORI in the demo wallet. Try MAX.' : 'You have less than that staked.'); return; }
     const staking = STAKE.mode === 'stake';
+    const cap = staking ? STAKE.wallet : STAKE.staked;
+    if (!(n > 0)) { toast('Enter an amount first.'); return; }
+    if (n > cap) { toast(staking ? 'Not enough NIMORI in the demo wallet. Try MAX.' : 'You have less than that staked.'); return; }
     openModal({
       title: staking ? 'Insert coin?' : 'Cash out?',
       explain: staking ? 'Staking puts you in the Arcade.' : 'Unstaking takes you out of the priority queue.',
@@ -82,30 +88,18 @@ function buildScreen() {
       confirm: staking ? 'Stake' : 'Unstake',
       onConfirm: () => {
         if (staking) { STAKE.wallet -= n; STAKE.staked += n; } else { STAKE.wallet += n; STAKE.staked -= n; }
-        amt.value = '';
-        paintScreen(el);
-        if (location.hash.startsWith('#/arcade')) render();
+        render();
         toast(staking ? `Staked ${fmt(n)} NIMORI (simulated). Priority pass on.` : `Unstaked ${fmt(n)} NIMORI (simulated).`);
       },
     });
   });
-  paintScreen(el);
-  return el;
-}
-function paintScreen(el = document.querySelector('.crt')) {
-  if (!el) return;
-  el.querySelector('[data-swallet]').textContent = fmt(STAKE.wallet);
-  el.querySelector('[data-sstaked]').textContent = fmt(STAKE.staked);
-  el.querySelector('[data-spass]').textContent = STAKE.staked > 0 ? 'ON' : 'OFF';
-  el.querySelector('[data-spass]').classList.toggle('on', STAKE.staked > 0);
-  el.querySelectorAll('[data-smode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.smode === STAKE.mode)));
-  el.querySelector('[data-sgo]').textContent = STAKE.mode === 'stake' ? '▶ INSERT COIN' : '◀ CASH OUT';
 }
 
 // ---------- scene (created once) ----------
 let scene = null;
+const crtEl = buildScreen(); // CSS3DRenderer only inserts it into the DOM on its first render, so keep the reference
 try {
-  scene = createScene($('#stage'), buildScreen());
+  scene = createScene($('#stage'), crtEl);
   window.__nimoriScene = scene;
 } catch (err) {
   console.warn('WebGL unavailable, showing the flat stage instead.', err);
@@ -250,9 +244,15 @@ function session() {
       <h1>No save file yet.</h1>
       <div class="savefile empty">
         <div class="slot">EMPTY SLOT</div>
-        <p style="color:#c9a98a;margin:8px 0 0">A seat NFT is minted for each side when a match opens a position.</p>
+        <p style="color:#c9a98a;margin:8px 0 0">Port 2 is empty. Plug in and the console opens on your save file.</p>
       </div>
-      <button class="btn btn-block" type="button" data-go="lobby" style="margin-top:12px">Go to the lobby</button>
+      <dl class="kv" style="margin-top:12px">
+        <dt>You bring</dt><dd>${fmt(parseFloat(state.amount) || 0)} NIMORI</dd>
+        <dt>Range</dt><dd>${DIFF[state.difficulty].label}</dd>
+        <dt>Head of the 1P queue</dt><dd>${SIM.queues[state.difficulty].p1[0][1]}</dd>
+      </dl>
+      <button class="btn btn-block" type="button" data-plug>Plug in as 2P</button>
+      <button class="btn btn-cream btn-block" type="button" data-go="lobby" style="margin-top:10px">Change amount in the lobby</button>
       ${sessionRules()}
     `;
   }
@@ -319,10 +319,9 @@ function arcade() {
       <li><span class="n">3</span><span><b>Pair vote.</b> Stakers vote on which pairs open a lobby.</span></li>
     </ol>
 
-    <div class="status ok"><span class="dot"></span><span>Console open · stake on its screen</span></div>
+    ${stakeWidget()}
     <dl class="kv">
       <dt>Demo wallet</dt><dd>${fmt(STAKE.wallet)} NIMORI (sim.)</dd>
-      <dt>Your stake</dt><dd>${fmt(STAKE.staked)} NIMORI</dd>
       <dt>Fee share rate</dt><dd>depends on real volume</dd>
     </dl>
     <p class="muted" style="margin-top:0">No APR is shown: there is no live volume yet, and a number here would be made up.</p>
@@ -380,31 +379,66 @@ function docs() {
 const ROUTES = { lobby, session, arcade, docs };
 
 // ---------- router ----------
-const screen = $('#screen');
+// Lobby: console closed, page in the side panel.
+// Session (once 2P is plugged in), Arcade, Docs: the lid opens and the page is drawn ON the console screen.
+// Phones: the screen is too small to read a page, so it shows a title card and the page stays below.
+const panel = $('#screen');
+const crt = scene ? crtEl : null;
+const crtBody = crt ? $('[data-crt-body]', crt) : null;
 let clockTimer = 0;
-function render() {
+let wasDesktop = window.innerWidth >= 1000;
+const routeName = () => {
   const name = (location.hash.replace(/^#\/?/, '').split('/')[0]) || 'lobby';
-  const route = ROUTES[name] ? name : 'lobby';
-  screen.innerHTML = ROUTES[route]();
-  screen.scrollTop = 0;
+  return ROUTES[name] ? name : 'lobby';
+};
+const lidOpenFor = (route) => route === 'arcade' || route === 'docs' || (route === 'session' && state.plugged);
+const TITLES = {
+  session: ['SAVE FILE #0142', 'both ports connected · session live'],
+  arcade: ['ARCADE', 'stake $NIMORI · insert coin below'],
+  docs: ['DOCS', 'how co-op liquidity works · read below'],
+};
+
+function render() {
+  const route = routeName();
+  const desktop = window.innerWidth >= 1000;
+  const open = !!scene && lidOpenFor(route);
+  const onScreen = open && desktop && !!crtBody;
+  document.body.dataset.mode = onScreen ? 'screen' : 'panel';
+  scene?.setScreenPx(desktop ? 880 : 640);
+  scene?.setLid(open);
+  scene?.setView(open ? 'screen' : route);
+  scene?.setDifficulty(state.difficulty);
+  scene?.relayout();
+
+  const html = ROUTES[route]();
+  const root = onScreen ? crtBody : panel;
+  panel.innerHTML = onScreen ? '' : html;
+  if (crtBody) {
+    crtBody.innerHTML = onScreen ? html : (open ? `<div class="crt-card"><b>${TITLES[route][0]}</b><span>${TITLES[route][1]}</span></div>` : '');
+    crtBody.scrollTop = 0;
+    $('[data-crt-route]', crt).textContent = route.toUpperCase();
+  }
+  panel.scrollTop = 0;
   $$('.tabs a').forEach((a) => (a.dataset.route === route ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')));
   document.title = `NIMORI · ${route[0].toUpperCase() + route.slice(1)}`;
-  scene?.setView(route);
-  scene?.setDifficulty(state.difficulty);
-  bind(route);
+  bind(root);
   clearInterval(clockTimer);
-  if (route === 'session' && state.plugged) {
-    const el = $('[data-clock]', screen);
+  const clock = $('[data-clock]', root);
+  if (route === 'session' && state.plugged && clock) {
     const tick = () => {
       const s = Math.floor((Date.now() - state.matchedAt) / 1000);
-      el.textContent = [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map((n) => String(n).padStart(2, '0')).join(':');
+      clock.textContent = [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map((n) => String(n).padStart(2, '0')).join(':');
     };
     tick();
     clockTimer = setInterval(tick, 1000);
   }
 }
+window.addEventListener('resize', () => {
+  const d = window.innerWidth >= 1000;
+  if (d !== wasDesktop) { wasDesktop = d; render(); }
+});
 
-function bind(route) {
+function bind(screen) {
   $$('[data-diff]', screen).forEach((b) => b.addEventListener('click', () => {
     state.difficulty = b.dataset.diff;
     scene?.setDifficulty(state.difficulty);
@@ -432,6 +466,7 @@ function bind(route) {
     const target = $(`#${a.dataset.anchor}`, screen);
     target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }));
+  bindStake(screen);
 }
 
 function confirmPlug() {
@@ -491,14 +526,17 @@ function plugIn() {
   state.plugged = true;
   state.matchedAt = Date.now();
   scene?.plug2P();
-  const btn = $('[data-plug]', screen);
+  const btn = $('[data-plug]');
   if (btn) { btn.disabled = true; btn.textContent = 'Plugging in…'; }
   setTimeout(() => {
     const m = $('#matched');
     m.classList.add('show');
     setHud();
-    render();
-    setTimeout(() => m.classList.remove('show'), 2400);
+    setTimeout(() => {
+      m.classList.remove('show');
+      // second cable is in: the lid opens and the save file appears on the screen
+      if (routeName() === 'session') render(); else location.hash = '#/session';
+    }, 1300);
   }, scene ? 1500 : 200);
 }
 

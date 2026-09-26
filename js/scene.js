@@ -288,8 +288,11 @@ export function createScene(mount, screenEl = null) {
   });
 
   // debossed wordmark on the deck
-  const logoTex = textTexture('NIMORI', { w: 1024, h: 200, font: '400 150px "Lilita One", Rubik, sans-serif', color: '#ffffff' });
-  const logo = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.215), new THREE.MeshStandardMaterial({ map: logoTex, color: 0x6a0200, transparent: true, opacity: 0.55, roughness: 0.6, depthWrite: false }));
+  // the real wordmark (same letters as the logo) as a printed badge on the lid
+  const logoTex = new THREE.TextureLoader().load(new URL('../img/wordmark.webp', import.meta.url).href);
+  logoTex.colorSpace = THREE.SRGBColorSpace;
+  logoTex.anisotropy = 8;
+  const logo = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.318), new THREE.MeshStandardMaterial({ map: logoTex, transparent: true, roughness: 0.45, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
   logo.rotation.x = -Math.PI / 2;
   logo.position.set(-0.08, deckTop + 0.001, -0.62);
   console3d.add(logo);
@@ -344,13 +347,17 @@ export function createScene(mount, screenEl = null) {
     css.domElement.className = 'css3d';
     mount.appendChild(css.domElement);
     cssObj = new CSS3DObject(screenEl);
-    const pxW = 640;
-    cssObj.scale.setScalar(scrW / pxW);
-    screenEl.style.width = pxW + 'px';
-    screenEl.style.height = Math.round(pxW * scrH / scrW) + 'px';
+    setScreenPx(640);
     cssObj.rotation.x = Math.PI / 2;
     cssObj.position.set(0, -0.094, scrZ);
     lid.add(cssObj);
+  }
+
+  function setScreenPx(pxW) {
+    if (!cssObj) return;
+    cssObj.scale.setScalar(scrW / pxW);
+    screenEl.style.width = pxW + 'px';
+    screenEl.style.height = Math.round(pxW * scrH / scrW) + 'px';
   }
 
   // ---------- front: controller ports ----------
@@ -532,6 +539,7 @@ export function createScene(mount, screenEl = null) {
     matchFlash: -10,
     view: 'lobby',
     lid: 0, // 0 closed, 1 open
+    lidGoal: 0,
   };
   const RANGES = { easy: [1, 1, 1, 1, 1], normal: [0, 1, 1, 1, 0], hard: [0, 0, 1, 0, 0] };
 
@@ -539,7 +547,8 @@ export function createScene(mount, screenEl = null) {
   const VIEWS = {
     lobby: [new THREE.Vector3(2.4, 2.9, 10.2), new THREE.Vector3(0.1, 0.28, 0.8)],
     session: [new THREE.Vector3(-1.6, 7.6, 7.4), new THREE.Vector3(0.0, 0.5, 0.3)],
-    arcade: [new THREE.Vector3(0.9, 4.6, 8.6), new THREE.Vector3(0.0, 1.45, -0.9)],
+    // lid open, straight at the screen (screen centre is about (0, 2.0, -1.32), normal (0, .26, .97))
+    screen: [new THREE.Vector3(0.0, 4.25, 7.0), new THREE.Vector3(0.0, 1.62, -1.4)],
     docs: [new THREE.Vector3(-7.2, 4.6, 9.0), new THREE.Vector3(-0.2, 0.4, 0.6)],
   };
   const camPos = VIEWS.lobby[0].clone();
@@ -560,7 +569,8 @@ export function createScene(mount, screenEl = null) {
     const panel = document.querySelector('[data-panel]');
     const desktop = window.innerWidth >= 1000;
     layout.distScale = desktop ? Math.max(1, 1.05 / camera.aspect) : Math.max(0.84, 1.05 / camera.aspect);
-    layout.offsetX = desktop && panel ? Math.round((panel.getBoundingClientRect().width + 24) / 2) : 0;
+    const panelShown = panel && document.body.dataset.mode !== 'screen';
+    layout.offsetX = desktop && panelShown ? Math.round((panel.getBoundingClientRect().width + 24) / 2) : 0;
     if (layout.offsetX) camera.setViewOffset(w, h, layout.offsetX, 0, w, h);
     else camera.clearViewOffset();
     camera.updateProjectionMatrix();
@@ -585,15 +595,17 @@ export function createScene(mount, screenEl = null) {
     tmpPos.copy(vp).sub(vt).multiplyScalar(layout.distScale).add(vt);
     camPos.lerp(tmpPos, k);
     camTgt.lerp(vt, k);
+    // almost still while a page is on the screen, so its text stays sharp and easy to click
+    const drift = state.view === 'screen' ? 0.12 : 1;
     camera.position.set(
-      camPos.x + Math.sin(t * 0.13) * 0.35 + pointer.x * 0.25,
-      camPos.y + Math.sin(t * 0.09) * 0.12 - pointer.y * 0.12,
-      camPos.z + Math.cos(t * 0.11) * 0.25,
+      camPos.x + (Math.sin(t * 0.13) * 0.35 + pointer.x * 0.25) * drift,
+      camPos.y + (Math.sin(t * 0.09) * 0.12 - pointer.y * 0.12) * drift,
+      camPos.z + Math.cos(t * 0.11) * 0.25 * drift,
     );
     camera.lookAt(camTgt);
 
     // lid: opens on Arcade (about 105 degrees, laptop-style), closes elsewhere
-    const lidGoal = state.view === 'arcade' ? 1 : 0;
+    const lidGoal = state.lidGoal;
     state.lid += (lidGoal - state.lid) * (1 - Math.exp(-dt * (lidGoal ? 2.6 : 4)));
     if (Math.abs(lidGoal - state.lid) < 0.0005) state.lid = lidGoal;
     const open = easeInOut(state.lid);
@@ -655,6 +667,8 @@ export function createScene(mount, screenEl = null) {
 
   return {
     setView(v) { state.view = VIEWS[v] ? v : 'lobby'; },
+    setLid(open) { state.lidGoal = open ? 1 : 0; },
+    setScreenPx,
     setDifficulty(d) { state.difficulty = RANGES[d] ? d : 'normal'; },
     plug2P() {
       if (state.plugged) return;
