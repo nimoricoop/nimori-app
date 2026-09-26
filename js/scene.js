@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
+import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
 const smoothGeo = (g, a = Math.PI / 3) => toCreasedNormals(g, a);
 
 const C = {
@@ -118,7 +119,7 @@ function coiledCurve(points, { pitch = 0.07, coilR = 0.07, lead = 0.35, samplesP
 }
 
 // ---------- scene ----------
-export function createScene(mount) {
+export function createScene(mount, screenEl = null) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -216,7 +217,8 @@ export function createScene(mount) {
   seam.position.y = 0.34;
   console3d.add(seam);
 
-  // raised top deck
+  // raised top deck = the LID: everything from here to the vents is re-parented to a hinge (Arcade opens it)
+  const lidFrom = console3d.children.length;
   const deckGeo = new RoundedBoxGeometry(W - 0.62, 0.12, D - 0.66, 6, 0.055);
   const deck = new THREE.Mesh(deckGeo, redPlastic);
   deck.position.set(0, topY + 0.02, -0.06);
@@ -298,6 +300,57 @@ export function createScene(mount) {
     const v = new THREE.Mesh(new RoundedBoxGeometry(0.055, 0.02, 0.42, 2, 0.01), ventMat);
     v.position.set(0.95 + i * 0.13, deckTop - 0.001, -0.78);
     console3d.add(v);
+  }
+
+  // ---------- lid: hinge at the back edge of the deck ----------
+  const lidTo = console3d.children.length;
+  const hingeZ = -0.06 - (D - 0.66) / 2;
+  const lid = new THREE.Group();
+  lid.position.set(0, topY + 0.02, hingeZ);
+  console3d.add(lid);
+  console3d.updateMatrixWorld(true);
+  console3d.children.slice(lidFrom, lidTo).forEach((o) => lid.attach(o));
+
+  // inside of the lid: bezel + screen, facing down while closed
+  const scrW = W - 1.02, scrH = D - 1.02;
+  const scrZ = (D - 0.66) / 2; // centre of the deck, from the hinge
+  const bezel = new THREE.Mesh(new RoundedBoxGeometry(scrW + 0.24, 0.03, scrH + 0.24, 4, 0.012), blackPlastic);
+  bezel.position.set(0, -0.075, scrZ);
+  lid.add(bezel);
+  const screenMat = new THREE.MeshStandardMaterial({ color: 0x120202, emissive: new THREE.Color(0x3a0806), emissiveIntensity: 1, roughness: 0.15 });
+  const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(scrW, scrH), screenMat);
+  screenMesh.rotation.x = Math.PI / 2; // faces -y, top edge towards the front of the lid
+  screenMesh.position.set(0, -0.092, scrZ);
+  lid.add(screenMesh);
+  const screenGlow = new THREE.PointLight(0xffb060, 0, 3.2, 2);
+  screenGlow.position.set(0, -0.6, scrZ);
+  lid.add(screenGlow);
+
+  // tray revealed when the lid is up: dark well + a cartridge slot glowing amber
+  const trayGeo = new THREE.ExtrudeGeometry(roundedRectShape(W - 0.8, D - 0.84, 0.12), { depth: 0.01, bevelEnabled: false, curveSegments: 16 });
+  trayGeo.rotateX(-Math.PI / 2);
+  const tray = new THREE.Mesh(trayGeo, new THREE.MeshStandardMaterial({ color: 0x1a0303, roughness: 0.8 }));
+  tray.position.set(0, topY + 0.04, -0.06);
+  console3d.add(tray);
+  const slotMat = new THREE.MeshStandardMaterial({ color: 0x220800, emissive: new THREE.Color(C.amber), emissiveIntensity: 0, roughness: 0.4 });
+  const slot = new THREE.Mesh(new RoundedBoxGeometry(1.6, 0.03, 0.14, 2, 0.01), slotMat);
+  slot.position.set(0, topY + 0.055, 0.3);
+  console3d.add(slot);
+
+  // HTML staking UI on the screen (CSS3D): real inputs and buttons, drawn in the same camera
+  let css = null, cssObj = null;
+  if (screenEl) {
+    css = new CSS3DRenderer();
+    css.domElement.className = 'css3d';
+    mount.appendChild(css.domElement);
+    cssObj = new CSS3DObject(screenEl);
+    const pxW = 640;
+    cssObj.scale.setScalar(scrW / pxW);
+    screenEl.style.width = pxW + 'px';
+    screenEl.style.height = Math.round(pxW * scrH / scrW) + 'px';
+    cssObj.rotation.x = Math.PI / 2;
+    cssObj.position.set(0, -0.094, scrZ);
+    lid.add(cssObj);
   }
 
   // ---------- front: controller ports ----------
@@ -478,6 +531,7 @@ export function createScene(mount) {
     plugStart: 0,
     matchFlash: -10,
     view: 'lobby',
+    lid: 0, // 0 closed, 1 open
   };
   const RANGES = { easy: [1, 1, 1, 1, 1], normal: [0, 1, 1, 1, 0], hard: [0, 0, 1, 0, 0] };
 
@@ -485,7 +539,7 @@ export function createScene(mount) {
   const VIEWS = {
     lobby: [new THREE.Vector3(2.4, 2.9, 10.2), new THREE.Vector3(0.1, 0.28, 0.8)],
     session: [new THREE.Vector3(-1.6, 7.6, 7.4), new THREE.Vector3(0.0, 0.5, 0.3)],
-    arcade: [new THREE.Vector3(8.0, 3.4, 7.6), new THREE.Vector3(0.2, 0.45, 0.6)],
+    arcade: [new THREE.Vector3(0.9, 4.6, 8.6), new THREE.Vector3(0.0, 1.45, -0.9)],
     docs: [new THREE.Vector3(-7.2, 4.6, 9.0), new THREE.Vector3(-0.2, 0.4, 0.6)],
   };
   const camPos = VIEWS.lobby[0].clone();
@@ -500,6 +554,7 @@ export function createScene(mount) {
     const w = mount.clientWidth || window.innerWidth;
     const h = mount.clientHeight || window.innerHeight;
     renderer.setSize(w, h, false);
+    css?.setSize(w, h);
     camera.aspect = w / h;
     // keep the console framed on narrow/tall viewports
     const panel = document.querySelector('[data-panel]');
@@ -509,6 +564,7 @@ export function createScene(mount) {
     if (layout.offsetX) camera.setViewOffset(w, h, layout.offsetX, 0, w, h);
     else camera.clearViewOffset();
     camera.updateProjectionMatrix();
+    // CSS3DRenderer (r170) reads camera.view itself, so the screen UI follows the same offset
   }
   new ResizeObserver(resize).observe(mount);
   window.addEventListener('resize', resize);
@@ -535,6 +591,22 @@ export function createScene(mount) {
       camPos.z + Math.cos(t * 0.11) * 0.25,
     );
     camera.lookAt(camTgt);
+
+    // lid: opens on Arcade (about 105 degrees, laptop-style), closes elsewhere
+    const lidGoal = state.view === 'arcade' ? 1 : 0;
+    state.lid += (lidGoal - state.lid) * (1 - Math.exp(-dt * (lidGoal ? 2.6 : 4)));
+    if (Math.abs(lidGoal - state.lid) < 0.0005) state.lid = lidGoal;
+    const open = easeInOut(state.lid);
+    lid.rotation.x = -open * 1.83;
+    const lit = smooth(0.7, 1, state.lid);
+    screenMat.emissiveIntensity = 1 + lit * 1.5;
+    screenGlow.intensity = lit * 1.4;
+    slotMat.emissiveIntensity = lit * (1.6 + Math.sin(t * 2.4) * 0.4);
+    if (screenEl) {
+      screenEl.style.opacity = lit.toFixed(3);
+      screenEl.style.visibility = lit > 0.02 ? 'visible' : 'hidden';
+      screenEl.inert = lit < 0.9;
+    }
 
     // 2P plug animation
     if (state.plugged && state.plugT < 1) {
@@ -577,6 +649,7 @@ export function createScene(mount) {
     });
 
     renderer.render(scene, camera);
+    if (css && (state.lid > 0.01)) css.render(scene, camera);
   }
   renderer.setAnimationLoop(frame);
 
@@ -599,6 +672,7 @@ export function createScene(mount) {
     },
     relayout: resize,
     get plugged() { return state.plugged; },
+    get lidOpen() { return state.lid; },
     get plugProgress() { return state.plugT; },
   };
 }

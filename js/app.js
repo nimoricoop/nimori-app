@@ -3,6 +3,7 @@ import { createScene } from './scene.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const fmt = (n, d = 0) => Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 
 // ---------- simulated state (nothing here is on-chain) ----------
 const state = {
@@ -26,17 +27,91 @@ const DIFF = {
   hard: { label: 'Hard', range: [0, 0, 1, 0, 0], note: 'Narrow range. Highest fees, highest IL, can go out of range and stop earning.' },
 };
 
+// ---------- Arcade screen: staking UI shown on the console's own screen (CSS3D) ----------
+const STAKE = { wallet: 50000, staked: 0, mode: 'stake' }; // demo wallet, simulated
+function buildScreen() {
+  const el = document.createElement('div');
+  el.className = 'crt';
+  el.innerHTML = `
+    <div class="crt-in">
+      <div class="crt-top"><span class="crt-title">ARCADE</span><span class="crt-tag">DEMO · SIMULATED</span></div>
+      <div class="crt-tabs" role="group" aria-label="Stake or unstake">
+        <button type="button" data-smode="stake" aria-pressed="true">STAKE</button>
+        <button type="button" data-smode="unstake" aria-pressed="false">UNSTAKE</button>
+      </div>
+      <label class="crt-field">
+        <input inputmode="decimal" placeholder="0" aria-label="Amount of NIMORI" data-samt>
+        <span>NIMORI</span>
+        <button type="button" data-smax>MAX</button>
+      </label>
+      <div class="crt-stats">
+        <div><small>WALLET</small><b data-swallet></b></div>
+        <div><small>STAKED</small><b data-sstaked></b></div>
+        <div><small>PRIORITY PASS</small><b data-spass></b></div>
+      </div>
+      <button type="button" class="crt-go" data-sgo>▶ INSERT COIN</button>
+    </div>`;
+  const amt = el.querySelector('[data-samt]');
+  el.querySelectorAll('[data-smode]').forEach((b) => b.addEventListener('click', () => {
+    STAKE.mode = b.dataset.smode; amt.value = ''; paintScreen(el);
+  }));
+  el.querySelector('[data-smax]').addEventListener('click', () => {
+    amt.value = String(STAKE.mode === 'stake' ? STAKE.wallet : STAKE.staked);
+  });
+  el.querySelector('[data-sgo]').addEventListener('click', () => {
+    const n = parseFloat((amt.value || '').replace(/[^\d.]/g, ''));
+    const cap = STAKE.mode === 'stake' ? STAKE.wallet : STAKE.staked;
+    if (!(n > 0)) { toast('Enter an amount on the screen.'); return; }
+    if (n > cap) { toast(STAKE.mode === 'stake' ? 'Not enough NIMORI in the demo wallet. Try MAX.' : 'You have less than that staked.'); return; }
+    const staking = STAKE.mode === 'stake';
+    openModal({
+      title: staking ? 'Insert coin?' : 'Cash out?',
+      explain: staking ? 'Staking puts you in the Arcade.' : 'Unstaking takes you out of the priority queue.',
+      rows: staking ? [
+        ['You stake', `${fmt(n)} NIMORI`],
+        ['Fee share', '10% of co-op trading fees, pro rata'],
+        ['Priority pass', 'matched first in lobby queues'],
+        ['Pair vote', 'on'],
+      ] : [
+        ['You unstake', `${fmt(n)} NIMORI`],
+        ['Left staked', `${fmt(STAKE.staked - n)} NIMORI`],
+        ['Priority pass', STAKE.staked - n > 0 ? 'still on' : 'off'],
+      ],
+      risk: staking ? 'Staked NIMORI stays exposed to the token price and to smart contract risk.' : '',
+      cancel: 'Back',
+      confirm: staking ? 'Stake' : 'Unstake',
+      onConfirm: () => {
+        if (staking) { STAKE.wallet -= n; STAKE.staked += n; } else { STAKE.wallet += n; STAKE.staked -= n; }
+        amt.value = '';
+        paintScreen(el);
+        if (location.hash.startsWith('#/arcade')) render();
+        toast(staking ? `Staked ${fmt(n)} NIMORI (simulated). Priority pass on.` : `Unstaked ${fmt(n)} NIMORI (simulated).`);
+      },
+    });
+  });
+  paintScreen(el);
+  return el;
+}
+function paintScreen(el = document.querySelector('.crt')) {
+  if (!el) return;
+  el.querySelector('[data-swallet]').textContent = fmt(STAKE.wallet);
+  el.querySelector('[data-sstaked]').textContent = fmt(STAKE.staked);
+  el.querySelector('[data-spass]').textContent = STAKE.staked > 0 ? 'ON' : 'OFF';
+  el.querySelector('[data-spass]').classList.toggle('on', STAKE.staked > 0);
+  el.querySelectorAll('[data-smode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.smode === STAKE.mode)));
+  el.querySelector('[data-sgo]').textContent = STAKE.mode === 'stake' ? '▶ INSERT COIN' : '◀ CASH OUT';
+}
+
 // ---------- scene (created once) ----------
 let scene = null;
 try {
-  scene = createScene($('#stage'));
+  scene = createScene($('#stage'), buildScreen());
   window.__nimoriScene = scene;
 } catch (err) {
   console.warn('WebGL unavailable, showing the flat stage instead.', err);
 }
 
 // ---------- helpers ----------
-const fmt = (n, d = 0) => Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 const rangeViz = (d) => `<span class="rangeviz" aria-hidden="true">${DIFF[d].range.map((o) => `<i class="${o ? 'on' : ''}"></i>`).join('')}</span>`;
 function toast(msg) {
   const t = $('#toast');
@@ -244,18 +319,13 @@ function arcade() {
       <li><span class="n">3</span><span><b>Pair vote.</b> Stakers vote on which pairs open a lobby.</span></li>
     </ol>
 
-    <h2>Stake</h2>
-    <label class="field">
-      <input inputmode="decimal" aria-label="Stake amount" placeholder="0" data-stake>
-      <span class="unit">NIMORI</span>
-    </label>
+    <div class="status ok"><span class="dot"></span><span>Console open · stake on its screen</span></div>
     <dl class="kv">
-      <dt>Wallet balance</dt><dd>— connect wallet</dd>
-      <dt>Your stake</dt><dd>0</dd>
+      <dt>Demo wallet</dt><dd>${fmt(STAKE.wallet)} NIMORI (sim.)</dd>
+      <dt>Your stake</dt><dd>${fmt(STAKE.staked)} NIMORI</dd>
       <dt>Fee share rate</dt><dd>depends on real volume</dd>
     </dl>
-    <button class="btn btn-block" type="button" data-stakebtn>Stake NIMORI</button>
-    <p class="muted" style="margin-top:8px">No APR is shown: there is no live volume yet, and a number here would be made up.</p>
+    <p class="muted" style="margin-top:0">No APR is shown: there is no live volume yet, and a number here would be made up.</p>
 
     <h2>Next lobby vote</h2>
     <p class="muted">Candidate pairs, simulated tallies.</p>
@@ -357,24 +427,6 @@ function bind(route) {
   $('[data-ragequit]', screen)?.addEventListener('click', () => openExit(true));
   $('[data-unplug]', screen)?.addEventListener('click', () => openExit(false));
   $('[data-skip]', screen)?.addEventListener('click', () => { state.matchedAt -= 24 * 3600 * 1000; render(); toast('Demo clock moved forward 24 h.'); });
-  $('[data-stakebtn]', screen)?.addEventListener('click', () => {
-    const n = parseFloat(($('[data-stake]', screen).value || '').replace(/[^\d.]/g, ''));
-    if (!(n > 0)) { toast('Enter an amount to stake.'); return; }
-    openModal({
-      title: 'Insert coin?',
-      explain: 'Staking puts you in the Arcade.',
-      rows: [
-        ['You stake', `${fmt(n)} NIMORI`],
-        ['Fee share', '10% of co-op trading fees, pro rata'],
-        ['Priority pass', 'matched first in lobby queues'],
-        ['Pair vote', 'on'],
-      ],
-      risk: 'Staked NIMORI stays exposed to the token price and to smart contract risk.',
-      cancel: 'Back',
-      confirm: 'Stake',
-      onConfirm: () => toast(`Staked ${fmt(n)} NIMORI (simulated). Priority pass on.`),
-    });
-  });
   $$('[data-anchor]', screen).forEach((a) => a.addEventListener('click', (e) => {
     e.preventDefault();
     const target = $(`#${a.dataset.anchor}`, screen);

@@ -341,3 +341,49 @@ hr { border: 0; border-top: 2px dashed rgba(106,2,0,.2); margin: 18px 0; }
   .status .dot { animation: none; }
   .matched { transition: opacity .2s; transform: none; }
 }
+
+/* ---------- Arcade: the console's screen (CSS3D layer) ---------- */
+.css3d { position: absolute !important; inset: 0; z-index: 2; pointer-events: none; }
+.crt {
+  pointer-events: auto; box-sizing: border-box; overflow: hidden; border-radius: 10px;
+  background: radial-gradient(ellipse at 50% 40%, #3a0806, #120202 80%);
+  color: var(--cream); font-family: var(--mono);
+  box-shadow: inset 0 0 40px rgba(0,0,0,.8), inset 0 0 0 2px rgba(243,174,21,.15);
+  visibility: hidden;
+}
+.crt::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: 10px;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 2px, transparent 2px 4px);
+}
+.crt-in { height: 100%; padding: 22px 26px; display: flex; flex-direction: column; gap: 14px; }
+.crt-top { display: flex; justify-content: space-between; align-items: center; }
+.crt-title {
+  font-family: var(--display); font-size: 40px; line-height: 1; color: var(--cream);
+  -webkit-text-stroke: 1.5px var(--maroon); paint-order: stroke fill;
+  text-shadow: 2px 2px 0 var(--amber), 4px 4px 0 #d99000, 0 0 18px rgba(243,174,21,.35);
+}
+.crt-tag { font-size: 12px; letter-spacing: .1em; color: var(--amber); border: 1px dashed rgba(243,174,21,.6); padding: 4px 8px; border-radius: 6px; }
+.crt-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.crt-tabs button, .crt-field button {
+  font: 700 16px var(--mono); letter-spacing: .08em; color: var(--cream); background: rgba(254,243,213,.06);
+  border: 2px solid rgba(254,243,213,.25); border-radius: 8px; padding: 8px; cursor: pointer;
+}
+.crt-tabs button[aria-pressed="true"] { background: var(--amber); color: #2a0600; border-color: var(--amber); }
+.crt-field { display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 16px; border-radius: 10px; background: rgba(0,0,0,.45); border: 2px solid rgba(243,174,21,.4); }
+.crt-field input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; font: 700 34px var(--mono); color: var(--amber); text-shadow: 0 0 12px rgba(243,174,21,.5); }
+.crt-field span { font-size: 16px; color: #e8cfa0; }
+.crt-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.crt-stats div { background: rgba(254,243,213,.05); border-radius: 8px; padding: 8px 10px; }
+.crt-stats small { display: block; font-size: 11px; letter-spacing: .1em; color: #c9a98a; }
+.crt-stats b { font-size: 20px; color: var(--cream); }
+.crt-stats b.on { color: #9dff6a; text-shadow: 0 0 10px rgba(157,255,106,.5); }
+.crt-go {
+  margin-top: auto; font: 400 26px var(--display); letter-spacing: .04em; color: var(--cream); cursor: pointer;
+  background: var(--red); border: 2px solid var(--maroon); border-radius: 12px; padding: 10px;
+  box-shadow: 0 5px 0 var(--maroon), 0 0 24px rgba(230,2,17,.45);
+  animation: coin 1.4s steps(2, end) infinite;
+}
+.crt-go:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--maroon); }
+.crt button:focus-visible, .crt input:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+@keyframes coin { 50% { box-shadow: 0 5px 0 var(--maroon), 0 0 6px rgba(230,2,17,.2); } }
+@media (prefers-reduced-motion: reduce) { .crt-go { animation: none; } }
