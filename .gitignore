@@ -2,3 +2,4 @@
 node_modules/
 .vercel/
 .env*
+videos/*-v1.mp4
