@@ -118,7 +118,7 @@ function coiledCurve(points, { pitch = 0.07, coilR = 0.07, lead = 0.35, samplesP
 }
 
 // ---------- scene ----------
-export function createScene(mount, overlayEl = null) {
+export function createScene(mount, overlayEl = null, { onBootStart = null, onBooted = null } = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -371,6 +371,35 @@ export function createScene(mount, overlayEl = null) {
   }
   drawScreen();
 
+  // boot screen: every time the lid opens, the screen shows the logo + a fast loading bar, then the page
+  const BOOT_MS = 750;
+  const bootLogo = new Image();
+  bootLogo.src = new URL('../img/wordmark.webp', import.meta.url).href;
+  const boot = { start: 0, done: false };
+  let lastScreen = {};
+  function drawBoot(p) {
+    const g = scrCanvas.getContext('2d');
+    const w = scrCanvas.width, h = scrCanvas.height;
+    g.fillStyle = '#fff8ec'; g.fillRect(0, 0, w, h);
+    const e = 1 - Math.pow(1 - Math.min(1, p / 0.35), 3); // logo pops in during the first third
+    if (bootLogo.complete && bootLogo.naturalWidth) {
+      const lw = w * 0.52 * (0.85 + 0.15 * e), lh = lw * bootLogo.naturalHeight / bootLogo.naturalWidth;
+      g.globalAlpha = e;
+      g.drawImage(bootLogo, (w - lw) / 2, h * 0.42 - lh / 2, lw, lh);
+      g.globalAlpha = 1;
+    }
+    const bw = w * 0.4, bh = 14, bx = (w - bw) / 2, by = h * 0.68;
+    g.fillStyle = '#f1e4cf'; g.beginPath(); g.roundRect(bx, by, bw, bh, 7); g.fill();
+    g.fillStyle = '#e60211'; g.beginPath(); g.roundRect(bx, by, Math.max(bh, bw * Math.min(1, p)), bh, 7); g.fill();
+    g.fillStyle = '#8f7c70'; g.textAlign = 'center'; g.font = '700 22px "Plus Jakarta Sans", sans-serif';
+    g.fillText(p < 1 ? 'LOADING' : 'READY', w / 2, by + 52);
+    scrTex.needsUpdate = true;
+  }
+  function setScreen(content = {}) {
+    lastScreen = content;
+    if (boot.done) drawScreen(content);
+  }
+
   // Desktop: the page is a normal 2D HTML element laid over the screen. Each frame the 4 screen corners are
   // projected and the element is fitted inside them. No CSS 3D transforms, so it cannot drift or blur.
   const scrCorners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => new THREE.Vector3(sx * scrW / 2, sy * scrH / 2, 0));
@@ -378,7 +407,7 @@ export function createScene(mount, overlayEl = null) {
   let overlayOn = false;
   function trackOverlay(lidAmount) {
     if (!overlayEl) return;
-    const vis = overlayOn ? smooth(0.93, 1, lidAmount) : 0;
+    const vis = overlayOn && boot.done ? smooth(0.93, 1, lidAmount) : 0;
     overlayEl.style.opacity = vis.toFixed(3);
     overlayEl.style.visibility = vis > 0.01 ? 'visible' : 'hidden';
     overlayEl.inert = vis < 0.9;
@@ -648,6 +677,14 @@ export function createScene(mount, overlayEl = null) {
 
     // lid: opens on Arcade (about 105 degrees, laptop-style), closes elsewhere
     const lidGoal = state.lidGoal;
+    // boot sequence runs once per opening, starting as the lid passes half-open
+    if (lidGoal === 0 && state.lid < 0.3) { boot.start = 0; boot.done = false; }
+    if (lidGoal === 1 && !boot.start && state.lid > 0.45) { boot.start = performance.now(); onBootStart?.(); }
+    if (boot.start && !boot.done) {
+      const bp = (performance.now() - boot.start) / BOOT_MS;
+      drawBoot(bp);
+      if (bp >= 1.12) { boot.done = true; drawScreen(lastScreen); onBooted?.(); }
+    }
     state.lid += (lidGoal - state.lid) * (1 - Math.exp(-realDt * (lidGoal ? 2.6 : 4)));
     if (Math.abs(lidGoal - state.lid) < 0.0005) state.lid = lidGoal;
     const open = easeInOut(state.lid);
@@ -705,7 +742,8 @@ export function createScene(mount, overlayEl = null) {
   return {
     setView(v) { state.view = VIEWS[v] ? v : 'lobby'; },
     setLid(open) { state.lidGoal = open ? 1 : 0; },
-    setScreen: drawScreen,
+    setScreen,
+    drawBoot, // exposed for previews/tests
     setOverlay(on) { overlayOn = !!on; },
     setDifficulty(d) { state.difficulty = RANGES[d] ? d : 'normal'; },
     plug2P() {

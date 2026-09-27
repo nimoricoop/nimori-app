@@ -2,6 +2,8 @@
 // The router rewrites the side panel (Lobby) or the page laid over the console screen. The 3D console (#stage) is mounted once.
 // Nothing here is on-chain: queues, prices, the match and staking are simulated in this file.
 import { createScene } from './scene.js';
+import { sfx, playedJustNow, isMuted, setMuted } from './sound.js';
+import { figMatch, figDifficulty, figTimeline, figPayouts, figHotSwap, figFees } from './figs.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -60,14 +62,15 @@ crtEl.className = 'crt';
 crtEl.innerHTML = '<div class="crt-body clean" data-crt-body tabindex="-1"></div>';
 $('#stage').appendChild(crtEl);
 try {
-  scene = createScene($('#stage'), crtEl);
+  scene = createScene($('#stage'), crtEl, { onBootStart: () => sfx('boot') });
   window.__nimoriScene = scene;
 } catch (err) {
   console.warn('WebGL unavailable, showing the flat card instead.', err);
 }
 
 // ---------- toast + modal ----------
-function toast(msg) {
+function toast(msg, kind = '') {
+  if (kind === 'error') sfx('error');
   const t = $('#toast');
   t.textContent = msg;
   t.classList.add('show');
@@ -90,6 +93,7 @@ function openModal({ icon = I.info, tone = '', title, explain = '', rows = [], n
     </div>
     <p class="demo-note">Demo · simulated. Nothing is signed or sent.</p>`;
   $('#modal').hidden = false;
+  sfx('open');
   $('[data-close]', $('#modalCard')).addEventListener('click', closeModal);
   const ok = $('[data-confirm]', $('#modalCard'));
   if (ok) ok.addEventListener('click', () => { closeModal(); onConfirm?.(); });
@@ -100,8 +104,8 @@ function closeModal() {
   $('#modal').hidden = true;
   lastFocus?.focus?.();
 }
-$('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+$('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') { sfx('back'); closeModal(); } });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#modal').hidden) { sfx('back'); closeModal(); } });
 
 // Seat value at simulated prices: full-range x*y=k and the mover rule (docs 3.6).
 function seatQuote() {
@@ -293,30 +297,33 @@ function docs() {
     <h1>Liquidity, two-player mode.</h1>
     <p class="lede">Player 1 deposits ETH. Player 2 deposits the token. NIMORI matches them, opens one position on Robinhood Chain and splits the fees between two seats.</p>
     <nav class="toc" aria-label="Docs sections">
-      <a href="#/docs" data-anchor="d-lobby">Lobby</a><a href="#/docs" data-anchor="d-diff">Difficulty</a><a href="#/docs" data-anchor="d-session">Session</a>
-      <a href="#/docs" data-anchor="d-exit">Exit</a><a href="#/docs" data-anchor="d-token">$NIMORI</a><a href="#/docs" data-anchor="d-risk">Risks</a>
+      <a href="#/docs" data-anchor="d-match">Match</a><a href="#/docs" data-anchor="d-diff">Difficulty</a><a href="#/docs" data-anchor="d-session">Session</a>
+      <a href="#/docs" data-anchor="d-exit">Mover rule</a><a href="#/docs" data-anchor="d-swap">Hot swap</a><a href="#/docs" data-anchor="d-token">$NIMORI</a><a href="#/docs" data-anchor="d-risk">Risks</a>
     </nav>
     <div class="card doc">
-      <h2 id="d-lobby">The lobby</h2>
-      <p>Every pair has two queues: 1P (ETH) and 2P (token). A deposit waits until one arrives on the other side. While waiting it earns nothing and can be withdrawn anytime, free. Matching is FIFO by value at the pool price, with TWAP checked against spot. A larger deposit is partly filled and the rest stays in line.</p>
-      <h2 id="d-diff">Difficulty</h2>
-      <table class="tbl">
-        <tr><th>Mode</th><th>Range</th><th>Fees</th><th>Risk</th></tr>
-        <tr><td>Easy</td><td>Full</td><td>Lower</td><td>Lowest IL</td></tr>
-        <tr><td>Normal</td><td>Wide</td><td>Medium</td><td>Medium IL</td></tr>
-        <tr><td>Hard</td><td>Narrow</td><td>Highest</td><td>Highest IL, can go out of range</td></tr>
-      </table>
-      <h2 id="d-session">Session and seats</h2>
-      <p>A match opens one Uniswap v4 position in a NIMORI pool and mints two Seat NFTs, 1P and 2P, with the entry snapshot and the fee split. Default split 50/50. When one queue is much longer, the scarce side gets a seat bonus, up to 70/30. A protocol fee of 10% of trading fees is taken before the split.</p>
-      <h2 id="d-exit">Unplug, hot swap, rage quit</h2>
-      <p><b>Unplug</b> after the 24 h minimum. The mover carries the IL; the non-mover gets their deposit back as long as the position covers it. <b>Hot swap</b>: a player waiting on the same side and difficulty takes the empty seat, no unwind. <b>Rage quit</b> before 24 h costs 1% of seat value, paid to the partner.</p>
-      <h2 id="d-token">$NIMORI</h2>
-      <p>Launched on Pons. Pons pools pay no swap fees to LPs, so co-op positions live in NIMORI pools instead. Staking gives a share of the 10% protocol fee, lobby priority and pair votes.</p>
+      <h2 id="d-match">1. The match</h2>
+      <p>Every pair has two queues: 1P (ETH) and 2P (token). A deposit waits until one arrives on the other side; while waiting it earns nothing and can be withdrawn anytime, free. Matching is FIFO by value at the pool price, with TWAP checked against spot.</p>
+      ${figMatch()}
+      <h2 id="d-diff">2. Difficulty</h2>
+      <p>Both players pick the same range width. Easy is full range, Normal is wide around spot, Hard is narrow.</p>
+      ${figDifficulty()}
+      <h2 id="d-session">3. The session</h2>
+      <p>Each seat is an ERC-721 save file with the entry snapshot and the fee split. Sell it and the buyer inherits the session.</p>
+      ${figTimeline()}
+      <h2 id="d-exit">4. At unplug: the mover rule</h2>
+      <p>Compare each asset's USD move since entry. The one that moved more is the mover and carries the IL. The non-mover gets their deposit back in their own asset, <b>as long as the position covers it</b>.</p>
+      ${figPayouts()}
+      <h2 id="d-swap">5. Hot swap</h2>
+      <p>When one player leaves, the position does not have to close.</p>
+      ${figHotSwap()}
+      <h2 id="d-token">6. $NIMORI and fees</h2>
+      <p>$NIMORI launched on Pons. Pons pools pay no swap fees to LPs, so co-op positions live in NIMORI pools instead.</p>
+      ${figFees()}
       <h2 id="d-risk">Risks</h2>
       <ol class="steps">
         <li><span class="n">!</span><span><b>Smart contracts</b> can have bugs. Audit status is published before deposits open.</span></li>
         <li><span class="n">!</span><span><b>Mover risk.</b> If your asset moves more than your partner's, you carry the IL.</span></li>
-        <li><span class="n">!</span><span><b>Cap.</b> The non-mover's claim is capped at the position value. Past roughly −75% on one asset, it is not repaid in full.</span></li>
+        <li><span class="n">!</span><span><b>Cap.</b> Past roughly −75% on one asset (full range), the non-mover is not repaid in full.</span></li>
         <li><span class="n">!</span><span><b>Range (Hard).</b> Narrow positions can go out of range and stop earning.</span></li>
         <li><span class="n">!</span><span><b>Lobby wait.</b> If the other queue is empty, your deposit earns nothing.</span></li>
       </ol>
@@ -347,12 +354,14 @@ const routeName = () => {
 };
 const lidOpenFor = (route) => route === 'arcade' || route === 'docs' || (route === 'session' && state.plugged);
 
+let wasOpen = false;
 function render() {
   const route = routeName();
   const desktop = window.innerWidth >= 1000;
   const open = !!scene && lidOpenFor(route);
   const onScreen = open && desktop;
   document.body.dataset.mode = onScreen ? 'screen' : 'panel';
+  if (open !== wasOpen) { sfx(open ? 'lid' : 'close'); wasOpen = open; }
   scene?.setLid(open);
   scene?.setView(open ? 'screen' : route);
   scene?.setDifficulty(state.difficulty);
@@ -421,8 +430,8 @@ function bindStake(root) {
     const n = parseFloat((amt.value || '').replace(/[^\d.]/g, ''));
     const staking = STAKE.mode === 'stake';
     const cap = staking ? STAKE.wallet : STAKE.staked;
-    if (!(n > 0)) { toast('Enter an amount first.'); amt.focus(); return; }
-    if (n > cap) { toast(staking ? 'Not enough NIMORI in the demo wallet. Try MAX.' : 'You have less than that staked.'); return; }
+    if (!(n > 0)) { toast('Enter an amount first.', 'error'); amt.focus(); return; }
+    if (n > cap) { toast(staking ? 'Not enough NIMORI in the demo wallet. Try MAX.' : 'You have less than that staked.', 'error'); return; }
     openModal({
       icon: staking ? I.coin : I.exit,
       tone: 'amber',
@@ -451,7 +460,7 @@ function bindStake(root) {
 }
 
 function confirmPlug() {
-  if (!(parseFloat(state.amount) > 0)) { toast('Enter an amount first.'); return; }
+  if (!(parseFloat(state.amount) > 0)) { toast('Enter an amount first.', 'error'); return; }
   const tokens = parseFloat(state.amount);
   openModal({
     icon: I.plug,
@@ -491,6 +500,7 @@ function openExit(early) {
     cancel: 'Keep playing',
     confirm: early ? 'Rage quit' : 'Unplug',
     onConfirm: () => {
+      sfx(early ? 'ragequit' : 'unplug');
       state.plugged = false;
       scene?.unplug2P();
       location.hash = '#/lobby';
@@ -505,10 +515,12 @@ function plugIn() {
   state.plugged = true;
   state.matchedAt = Date.now();
   scene?.plug2P();
+  setTimeout(() => sfx('plug'), 250);
   $$('[data-plug]').forEach((b) => { b.disabled = true; b.textContent = 'Plugging in…'; });
   setTimeout(() => {
     const m = $('#matched');
     m.classList.add('show');
+    sfx('matched');
     setHud();
     setTimeout(() => {
       m.classList.remove('show');
@@ -529,3 +541,24 @@ window.addEventListener('hashchange', render);
 if (!location.hash) history.replaceState(null, '', '#/lobby');
 document.fonts?.ready.then(() => { const r = routeName(); if (lidOpenFor(r)) scene?.setScreen(screenFor(r)); });
 render();
+
+// ---------- arcade click sounds ----------
+// Runs after the element's own handler (bubble phase): if that handler already played a sound, stay quiet.
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('button, a');
+  if (!el || el.disabled || playedJustNow()) return;
+  if (el.matches('[data-confirm]')) sfx('coin');
+  else if (el.matches('[data-close]')) sfx('back');
+  else if (el.matches('[data-diff], [data-smode], [data-smax], .toc a, [data-anchor]')) sfx('select');
+  else sfx('blip');
+});
+const muteBtn = $('[data-mute]');
+const paintMute = () => {
+  muteBtn.setAttribute('aria-pressed', String(!isMuted()));
+  muteBtn.title = isMuted() ? 'Sound off' : 'Sound on';
+  muteBtn.innerHTML = isMuted()
+    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4zM22 9l-6 6M16 9l6 6"/></svg>'
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+};
+muteBtn.addEventListener('click', () => { setMuted(!isMuted()); paintMute(); if (!isMuted()) sfx('coin'); });
+paintMute();

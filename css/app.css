@@ -435,3 +435,15 @@ body[data-mode="screen"] .panel { display: none; }
   .row2 { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) { .modal, .modal-card { animation: none; } }
+
+/* sound toggle */
+.sound { width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(254,243,213,.3); background: rgba(254,243,213,.14); color: var(--cream); display: grid; place-items: center; padding: 0; }
+.sound svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.sound[aria-pressed="false"] { opacity: .6; }
+.sound:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+
+/* docs figures */
+.fig { margin: 12px 0 18px; padding: 14px; background: var(--c-bg); border: 1px solid var(--c-line); border-radius: 16px; }
+.fig svg { display: block; width: 100%; height: auto; }
+.fig figcaption { margin-top: 8px; font-family: var(--c-ui); font-size: 12.5px; color: var(--c-ink-3); }
+.clean .fig svg, .fig svg { stroke: none; stroke-width: 1; fill: currentColor; width: 100%; height: auto; }
