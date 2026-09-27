@@ -1,0 +1,10 @@
+{
+  "name": "nimori-app",
+  "private": true,
+  "type": "commonjs",
+  "scripts": { "dev": "node scripts/dev-server.js" },
+  "dependencies": {
+    "@vercel/blob": "^0.27.0",
+    "viem": "^2.21.0"
+  }
+}

@@ -3,6 +3,7 @@
 // Nothing here is on-chain: queues, prices, the match and staking are simulated in this file.
 import { createScene } from './scene.js';
 import { sfx, playedJustNow, isMuted, setMuted } from './sound.js';
+import * as W from './wallet.js';
 import { figMatch, figDifficulty, figTimeline, figPayouts, figHotSwap, figFees } from './figs.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -26,6 +27,8 @@ const I = {
   info: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
   wallet: '<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18M16 14h2"/></svg>',
   range: '<svg viewBox="0 0 24 24"><path d="M3 12h18M7 8l-4 4 4 4M17 8l4 4-4 4"/></svg>',
+  ticket: '<svg viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z"/><path d="M9 6v12" stroke-dasharray="2 2"/></svg>',
+  x: '<svg viewBox="0 0 24 24"><path d="M4 4l16 16M20 4 4 20"/></svg>',
   exit: '<svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l-5-5 5-5M5 12h11"/></svg>',
 };
 
@@ -78,7 +81,7 @@ function toast(msg, kind = '') {
   toast._t = setTimeout(() => t.classList.remove('show'), 2800);
 }
 let lastFocus = null;
-function openModal({ icon = I.info, tone = '', title, explain = '', rows = [], note = '', body = '', cancel = 'Cancel', confirm = null, onConfirm = null }) {
+function openModal({ icon = I.info, tone = '', title, explain = '', rows = [], note = '', body = '', cancel = 'Cancel', confirm = null, onConfirm = null, demo = true }) {
   lastFocus = document.activeElement;
   $('#modalCard').innerHTML = `
     <div class="ico ${tone}">${icon}</div>
@@ -91,7 +94,7 @@ function openModal({ icon = I.info, tone = '', title, explain = '', rows = [], n
       <button class="btn" type="button" data-close>${cancel}</button>
       ${confirm ? `<button class="btn btn-primary" type="button" data-confirm>${confirm}</button>` : ''}
     </div>
-    <p class="demo-note">Demo · simulated. Nothing is signed or sent.</p>`;
+    ${demo ? '<p class="demo-note">Demo · simulated. Nothing is signed or sent.</p>' : ''}`;
   $('#modal').hidden = false;
   sfx('open');
   $('[data-close]', $('#modalCard')).addEventListener('click', closeModal);
@@ -134,6 +137,7 @@ function lobby() {
     ? `<li class="you"><span class="addr">you</span><span>${fmt(state.amount)}</span></li>`
     : `<li class="empty"><span>empty seat</span><span>—</span></li>`;
   return `
+    <a class="draw-banner" href="#/draw"><span>PRE-LAUNCH</span><b>Plug in your wallet, get a ticket for the $NIMORI draw</b><i>→</i></a>
     <p class="eyebrow">Lobby · NIMORI / ETH</p>
     <h1>${state.plugged ? 'Player 2 connected.' : 'Player 1 is waiting.'}</h1>
     <p class="lede">You bring the token. Player 1 already brought the ETH. One Uniswap v4 position, two seats.</p>
@@ -331,10 +335,175 @@ function docs() {
   `;
 }
 
-const ROUTES = { lobby, session, arcade, docs };
+// ---------- pre-launch draw ----------
+// Connect -> sign one free message -> the server verifies it and stores ONE ticket per wallet.
+// Sharing on X only comes after that, from a real entry.
+const DRAW = { entry: null, players: null, busy: false, rolled: false, error: '' };
+const drawMessage = (address, issued) => [
+  'NIMORI - pre-launch draw',
+  '',
+  'address: ' + address.toLowerCase(),
+  'issued: ' + issued,
+  '',
+  'Signing is free and sends nothing. It enters this wallet in the $NIMORI draw: one ticket per wallet.',
+].join('\n'); // must stay byte-identical to entryMessage() in api/_shared.js
+
+async function drawApi(path = '', init) {
+  const r = await fetch('/api/plug' + path, init);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'Server error');
+  return j;
+}
+async function refreshDraw() {
+  try {
+    const a = W.account()?.address;
+    const j = await drawApi(a ? '?address=' + a : '');
+    DRAW.players = j.players;
+    DRAW.entry = j.entry || null;
+    if (DRAW.entry) DRAW.rolled = true;
+  } catch { DRAW.players = null; }
+  if (routeName() === 'draw') render();
+}
+
+function ticketCard(e, rolling = false) {
+  return `
+    <div class="ticket ${rolling ? 'rolling' : ''}" data-ticket>
+      <div class="ticket-top"><img src="img/wordmark.webp" alt="NIMORI"><span>PRE-LAUNCH DRAW</span></div>
+      <div class="ticket-code" data-code>${rolling ? 'NMR-······' : e.ticket.code}</div>
+      <div class="ticket-row"><span>Wallet</span><b>${W.short(e.address)}</b></div>
+      <div class="ticket-row"><span>Cartridge</span><b>${e.ticket.cart}</b></div>
+      <div class="ticket-foot">1 wallet · 1 ticket · waiting for player 2 ▮▮▮▮▯</div>
+    </div>`;
+}
+
+function draw() {
+  const acc = W.account();
+  const e = DRAW.entry;
+  const step = e ? 3 : acc ? 2 : 1;
+  return `
+    <p class="eyebrow">Pre-launch · $NIMORI draw</p>
+    <h1>Plug in. Get a ticket.</h1>
+    <p class="lede">Connect a wallet and sign once. It's free and sends nothing. One ticket per wallet; tickets drawn at launch win a $NIMORI airdrop.</p>
+    <div class="draw-count"><span class="dot"></span><b>${DRAW.players ?? '—'}</b> players plugged in</div>
+
+    <div class="card action draw-steps">
+      <div class="dstep ${step > 1 ? 'done' : step === 1 ? 'on' : ''}">
+        <span class="n">1</span><div><b>Connect a wallet</b><small>${acc ? W.short(acc.address) + ' · ' + acc.name : 'Any EVM wallet'}</small></div>
+        ${acc ? `<button class="linkbtn" type="button" data-wdisconnect>Change</button>` : `<button class="btn btn-primary" type="button" data-wconnect>${I.wallet} Connect</button>`}
+      </div>
+      <div class="dstep ${step > 2 ? 'done' : step === 2 ? 'on' : ''}">
+        <span class="n">2</span><div><b>Sign to plug in</b><small>Free signature, no transaction, no approval</small></div>
+        ${step === 2 ? `<button class="btn btn-primary" type="button" data-wsign ${DRAW.busy ? 'disabled' : ''}>${DRAW.busy ? 'Check your wallet…' : I.plug + ' Plug in'}</button>` : ''}
+      </div>
+      <div class="dstep ${step === 3 ? 'on' : ''}">
+        <span class="n">3</span><div><b>Your ticket</b><small>${e ? 'Entered ' + new Date(e.enteredAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Revealed after you plug in'}</small></div>
+      </div>
+      ${DRAW.error ? `<div class="note" style="background:var(--c-red-50)">${I.info}<span>${DRAW.error}</span></div>` : ''}
+      ${e ? `
+        ${ticketCard(e, !DRAW.rolled)}
+        <div class="actions">
+          <button class="btn btn-primary" type="button" data-wshare>${I.x} Share on X</button>
+          <button class="btn" type="button" data-go="docs">How NIMORI works</button>
+        </div>` : ''}
+    </div>
+
+    <h2>How the draw works</h2>
+    <ol class="steps">
+      <li><span class="n">1</span><span><b>One wallet, one ticket.</b> Every ticket has the same odds. The cartridge on your ticket is cosmetic.</span></li>
+      <li><span class="n">2</span><span><b>Drawn at launch, in public.</b> Winners come from a Robinhood Chain block hash announced in advance, so nobody can pick them, us included.</span></li>
+      <li><span class="n">3</span><span><b>Winners get a $NIMORI airdrop</b> after launch. The amount and the number of winners are announced before the draw.</span></li>
+      <li><span class="n">4</span><span><b>Stay safe.</b> The draw never asks for a transaction, an approval or a seed phrase. We never DM first.</span></li>
+    </ol>
+  `;
+}
+
+async function doSign() {
+  const acc = W.account();
+  if (!acc || DRAW.busy) return;
+  DRAW.busy = true; DRAW.error = ''; render();
+  try {
+    const issued = new Date().toISOString();
+    const signature = await W.sign(drawMessage(acc.address, issued));
+    const j = await drawApi('', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ address: acc.address, issued, signature }) });
+    DRAW.entry = { address: j.address, ticket: j.ticket, enteredAt: j.enteredAt };
+    DRAW.players = j.players;
+    DRAW.rolled = !!j.already;
+    sfx('coin');
+  } catch (err) {
+    DRAW.error = /reject|denied|4001/i.test(String(err?.message || err)) ? 'Signature cancelled in the wallet.' : String(err?.message || err);
+    sfx('error');
+  }
+  DRAW.busy = false;
+  render();
+  $('[data-ticket]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (DRAW.entry && !DRAW.rolled) rollTicket();
+}
+
+// slot-machine reveal of the ticket code on the card (and on the console screen)
+function rollTicket() {
+  const el = $('[data-code]');
+  const code = DRAW.entry.ticket.code;
+  const hex = '0123456789ABCDEF';
+  const t0 = performance.now(), dur = 1500;
+  let lastTick = 0;
+  const step = (now) => {
+    const k = Math.min(1, (now - t0) / dur);
+    const fixed = Math.floor(k * 6);
+    const s = 'NMR-' + code.slice(4, 4 + fixed) + [...Array(6 - fixed)].map(() => hex[(Math.random() * 16) | 0]).join('');
+    if (el) el.textContent = s;
+    if (now - lastTick > 70 && k < 1) { sfx('blip'); lastTick = now; }
+    if (k < 1) requestAnimationFrame(step);
+    else {
+      DRAW.rolled = true;
+      $('[data-ticket]')?.classList.remove('rolling');
+      sfx('matched');
+      const r = routeName();
+      if (lidOpenFor(r)) scene?.setScreen(screenFor(r));
+    }
+  };
+  requestAnimationFrame(step);
+}
+
+function shareOnX() {
+  const e = DRAW.entry;
+  if (!e) return;
+  const site = /localhost|127\.0\.0\.1/.test(location.hostname) ? '' : '\n\n' + location.origin;
+  const text = `Plugged in to @nimoricoop 🎮\n\nTicket ${e.ticket.code} · waiting for player 2 ▮▮▮▮▯${site}`;
+  window.open('https://x.com/intent/post?text=' + encodeURIComponent(text), '_blank', 'noopener');
+}
+
+function openWalletPicker() {
+  const list = W.wallets();
+  openModal({
+    icon: I.wallet,
+    title: 'Connect wallet',
+    explain: list.length ? 'Pick a wallet. Connecting only reads your address; nothing is signed yet.' : 'No wallet found in this browser. Install one (Rabby, MetaMask, Coinbase Wallet) or open this page in your wallet app.',
+    body: list.length ? `<div class="wallets">${list.map((w, i) => `<button type="button" class="wallet-opt" data-wpick="${i}">${w.icon ? `<img src="${w.icon}" alt="">` : ''}<span>${w.name}</span><small>Detected</small></button>`).join('')}</div>` : '',
+    cancel: 'Close',
+    demo: false,
+  });
+  $$('[data-wpick]', $('#modalCard')).forEach((b) => b.addEventListener('click', async () => {
+    const w = list[+b.dataset.wpick];
+    closeModal();
+    try { await W.connect(w); sfx('select'); } catch (err) { toast(/reject|denied|4001/i.test(String(err?.message)) ? 'Connection cancelled.' : String(err?.message || err), 'error'); }
+  }));
+}
+W.onChange(() => {
+  const a = W.account();
+  const btn = $('[data-connect]');
+  btn.textContent = a ? W.short(a.address) : 'Connect wallet';
+  DRAW.entry = null; DRAW.rolled = false; DRAW.error = '';
+  refreshDraw();
+  if (routeName() !== 'draw') render();
+});
+
+const ROUTES = { lobby, session, arcade, docs, draw };
 
 // ---------- console screen content (drawn inside the 3D scene, never an HTML overlay) ----------
 function screenFor(route) {
+  if (route === 'draw') return DRAW.entry && DRAW.rolled
+    ? { title: 'PRE-LAUNCH DRAW', big: DRAW.entry.ticket.code, lines: ['YOUR TICKET', '1 WALLET · 1 TICKET'] }
+    : { title: 'PRE-LAUNCH DRAW', big: 'PLUG IN', lines: ['GET A TICKET', `${DRAW.players ?? '—'} PLAYERS PLUGGED IN`] };
   if (route === 'session') return { title: 'SAVE FILE #0142', big: clockText(), lines: ['TIME PLAYED', `FEE SPLIT 50/50 · ${DIFF[state.difficulty].label.toUpperCase()}`] };
   if (route === 'arcade') return { title: 'ARCADE', big: STAKE.staked ? fmt(STAKE.staked) : 'INSERT COIN', lines: [STAKE.staked ? 'NIMORI STAKED' : 'STAKE $NIMORI', `PRIORITY PASS ${STAKE.staked ? 'ON' : 'OFF'}`] };
   return { title: 'HOW TO PLAY', big: '1P + 2P', lines: ['ETH + TOKEN = ONE POSITION', 'THE MOVER CARRIES THE IL'] };
@@ -352,7 +521,7 @@ const routeName = () => {
   const name = (location.hash.replace(/^#\/?/, '').split('/')[0]) || 'lobby';
   return ROUTES[name] ? name : 'lobby';
 };
-const lidOpenFor = (route) => route === 'arcade' || route === 'docs' || (route === 'session' && state.plugged);
+const lidOpenFor = (route) => route === 'draw' || route === 'arcade' || route === 'docs' || (route === 'session' && state.plugged);
 
 let wasOpen = false;
 function render() {
@@ -419,6 +588,10 @@ function bind(root) {
     $(`#${a.dataset.anchor}`, root)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }));
   bindStake(root);
+  $('[data-wconnect]', root)?.addEventListener('click', openWalletPicker);
+  $('[data-wdisconnect]', root)?.addEventListener('click', () => { W.disconnect(); });
+  $('[data-wsign]', root)?.addEventListener('click', doSign);
+  $('[data-wshare]', root)?.addEventListener('click', shareOnX);
 }
 
 function bindStake(root) {
@@ -530,13 +703,7 @@ function plugIn() {
   }, scene ? 1500 : 200);
 }
 
-$('[data-connect]').addEventListener('click', () => openModal({
-  icon: I.wallet,
-  title: 'Connect wallet',
-  explain: 'Contracts are not deployed yet, so wallets are off in this demo.',
-  body: `<div class="wallets">${['MetaMask', 'Rabby', 'Coinbase Wallet', 'WalletConnect'].map((w) => `<button type="button" disabled>${w}<small>Soon</small></button>`).join('')}</div>`,
-  cancel: 'Close',
-}));
+$('[data-connect]').addEventListener('click', () => (W.account() ? (location.hash = '#/draw') : openWalletPicker()));
 window.addEventListener('hashchange', render);
 if (!location.hash) history.replaceState(null, '', '#/lobby');
 document.fonts?.ready.then(() => { const r = routeName(); if (lidOpenFor(r)) scene?.setScreen(screenFor(r)); });
@@ -562,3 +729,4 @@ const paintMute = () => {
 };
 muteBtn.addEventListener('click', () => { setMuted(!isMuted()); paintMute(); if (!isMuted()) sfx('coin'); });
 paintMute();
+refreshDraw();
