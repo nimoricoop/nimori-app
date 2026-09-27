@@ -1,5 +1,5 @@
 // NIMORI demo — app shell + hash router.
-// The router only rewrites #page and #side. The 3D console (#stage) is mounted once and never re-created.
+// The router rewrites the side panel (Lobby) or the page laid over the console screen. The 3D console (#stage) is mounted once.
 // Nothing here is on-chain: queues, prices, the match and staking are simulated in this file.
 import { createScene } from './scene.js';
 
@@ -55,8 +55,12 @@ const clockText = () => {
 
 // ---------- scene (created once) ----------
 let scene = null;
+const crtEl = document.createElement('div');
+crtEl.className = 'crt';
+crtEl.innerHTML = '<div class="crt-body clean" data-crt-body tabindex="-1"></div>';
+$('#stage').appendChild(crtEl);
 try {
-  scene = createScene($('#stage'));
+  scene = createScene($('#stage'), crtEl);
   window.__nimoriScene = scene;
 } catch (err) {
   console.warn('WebGL unavailable, showing the flat card instead.', err);
@@ -119,61 +123,64 @@ function seatQuote() {
 // ---------- pages ----------
 function lobby() {
   const q = SIM.queues[state.difficulty];
-  const tokens = parseFloat(state.amount) || 0;
-  const p1rows = q.p1.map((r) => `<li><span class="addr">${r[0]}</span><span>${r[1]} · ${r[2]}</span></li>`).join('');
+  const head = q.p1[0];
+  const usd = (parseFloat(state.amount) || 0) * SIM.tokenUsd;
+  const p1rows = q.p1.map((r) => `<li><span class="addr">${r[0]}</span><span>${r[1]}</span></li>`).join('');
   const p2rows = state.plugged
-    ? `<li class="you"><span>You</span><span>${fmt(tokens)} NIMORI</span></li>`
-    : '<li class="empty"><span>Empty seat</span><span>—</span></li>';
+    ? `<li class="you"><span class="addr">you</span><span>${fmt(state.amount)}</span></li>`
+    : `<li class="empty"><span>empty seat</span><span>—</span></li>`;
   return `
     <p class="eyebrow">Lobby · NIMORI / ETH</p>
     <h1>${state.plugged ? 'Player 2 connected.' : 'Player 1 is waiting.'}</h1>
-    <p class="lede">You bring the token, player 1 already brought the ETH. One position, two seats, fees split between you.</p>
+    <p class="lede">You bring the token. Player 1 already brought the ETH. One Uniswap v4 position, two seats.</p>
 
-    <h2>1. Pick a difficulty</h2>
-    <div class="opts" role="group" aria-label="Difficulty">
-      ${Object.entries(DIFF).map(([k, v]) => `
-        <button type="button" class="opt" data-diff="${k}" aria-pressed="${k === state.difficulty}" ${state.plugged ? 'disabled' : ''}>
-          <b>${v.label}</b><span>${v.note}</span><span class="pill">${rangeViz(k)} ${SIM.queues[k].p1.length} waiting</span>
-        </button>`).join('')}
+    <div class="pairbar">
+      <span class="pair"><span class="coin eth">Ξ</span><span class="coin">N</span>NIMORI / ETH</span>
+      <span class="muted">More lobbies open by Arcade vote.</span>
     </div>
 
-    <h2>2. Check the queues</h2>
-    <div class="grid2">
-      <div class="card qcard">
-        <div class="qhead"><div class="ico">${I.eth}</div><div><b>1P · ETH</b><small>${DIFF[state.difficulty].label} queue, first in line matches first</small></div></div>
-        <ul class="rows">${p1rows}</ul>
+    <h2>Difficulty</h2>
+    <div class="seg" role="group" aria-label="Difficulty">
+      ${Object.entries(DIFF).map(([k, v]) => `<button type="button" data-diff="${k}" aria-pressed="${k === state.difficulty}" ${state.plugged ? 'disabled' : ''}>${v.label}</button>`).join('')}
+    </div>
+    <div class="seg-note">${rangeViz(state.difficulty)}<span>${DIFF[state.difficulty].note} Shown on the console's RANGE strip.</span></div>
+
+    <div class="queues">
+      <div class="queue">
+        <div class="queue-h"><b>1P</b><span>ETH queue · ${DIFF[state.difficulty].label}</span></div>
+        <ol>${p1rows}</ol>
       </div>
-      <div class="card qcard">
-        <div class="qhead"><div class="ico amber">${I.coin}</div><div><b>2P · NIMORI</b><small>Your side</small></div></div>
-        <ul class="rows">${p2rows}</ul>
+      <div class="queue">
+        <div class="queue-h"><b>2P</b><span>NIMORI queue</span></div>
+        <ol>${p2rows}</ol>
       </div>
     </div>
+    <p class="muted" style="margin-top:8px">Matched FIFO by value, same difficulty only. Head of the 1P queue: <span class="mono">${head[0]}</span>, ${head[1]}, waiting ${head[2]}.</p>
 
-    <h2>3. Plug in</h2>
-    <div class="card action">
-      ${state.plugged ? `
-        <div class="qhead"><div class="ico ok">${I.plug}</div><div><b>Matched with ${head()[0]}</b><small>Save file #0142 minted (simulated)</small></div></div>
-        <div class="actions">
-          <button class="btn btn-primary" type="button" data-go="session">Open your save file</button>
-          <button class="btn" type="button" data-reset>Reset demo</button>
-        </div>
-      ` : `
-        <label class="field">
-          <input inputmode="decimal" aria-label="Deposit amount in NIMORI" value="${state.amount}" data-amount>
-          <span class="unit">NIMORI</span>
-        </label>
-        <dl class="kv">
-          <dt>Value at pool price</dt><dd data-usd>≈ $${fmt(tokens * SIM.tokenUsd)}</dd>
-          <dt>Matches with</dt><dd>${head()[0]} · ${head()[1]}</dd>
-          <dt>Fee split</dt><dd>50 / 50</dd>
-          <dt>Minimum session</dt><dd>24 h</dd>
-          <dt>Before a match</dt><dd>Withdraw anytime, free</dd>
-        </dl>
-        <button class="btn btn-primary btn-block" type="button" data-plug>${I.plug} Plug in as 2P</button>
-      `}
+    <div class="status ${state.plugged ? 'ok' : ''}">
+      <span class="dot"></span>
+      <span>${state.plugged ? 'MATCHED · save file #0142 minted (simulated)' : 'port 2 empty · waiting for player 2 ▮▮▮▯▯'}</span>
     </div>
 
-    <div class="note">${I.info}<span><b>Who carries what.</b> The side whose asset moved more carries the IL. If NIMORI moves more, you (2P) carry it, and 1P gets their ETH back <b>as long as the position covers it</b>. Past roughly −75% on the token, the cap applies and 1P gets less.</span></div>
+    ${state.plugged ? `
+      <button class="btn btn-ok btn-block" type="button" data-go="session">Open your save file →</button>
+      <button class="btn btn-cream btn-block" type="button" data-reset style="margin-top:10px">Reset demo</button>
+    ` : `
+      <label class="field">
+        <input inputmode="decimal" aria-label="Deposit amount in NIMORI" value="${state.amount}" data-amount>
+        <span class="unit">NIMORI</span>
+      </label>
+      <dl class="kv">
+        <dt>Value at pool price</dt><dd data-usd>≈ $${fmt(usd)}</dd>
+        <dt>Fee split</dt><dd>50 / 50 (2P queue is short)</dd>
+        <dt>Min session</dt><dd>24 h</dd>
+        <dt>While unmatched</dt><dd>withdraw anytime, free</dd>
+      </dl>
+      <button class="btn btn-block" type="button" data-plug>Plug in as 2P</button>
+    `}
+
+    <p class="risk"><b>Who carries what.</b> The side whose asset moved more carries the IL. If the token moves more, 2P carries it, and 1P gets their ETH back <b>as long as the position covers it</b>. Past roughly −75% on the token, the cap applies and 1P gets less.</p>
+    <p class="muted" style="margin-top:12px">Demo: queues, prices and the match are simulated. No contract is deployed.</p>
   `;
 }
 
@@ -209,7 +216,7 @@ function session() {
         <dt>Entry prices</dt><dd>ETH $${fmt(SIM.ethUsd)} · NIMORI $${SIM.tokenUsd.toFixed(2)} (sim.)</dd>
         <dt>Range</dt><dd>${DIFF[state.difficulty].label} ${rangeViz(state.difficulty)}</dd>
       </dl>
-      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--ink-3)"><span>Fee split · you 50%</span><span>partner 50%</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--c-ink-3)"><span>Fee split · you 50%</span><span>partner 50%</span></div>
       <div class="split"><i style="width:50%;background:var(--amber)"></i><i style="width:50%;background:var(--red)"></i></div>
       <div style="display:flex;justify-content:space-between;align-items:end;gap:10px;margin-top:16px">
         <div><div class="muted">Time played</div><div class="clock" data-clock>${clockText()}</div></div>
@@ -317,24 +324,6 @@ function docs() {
   `;
 }
 
-// right-hand summary card (like a "your position" panel)
-function side(route) {
-  if (state.plugged) {
-    return `
-      <h3>Your seat</h3>
-      <div class="stat"><div class="ico amber">${I.save}</div><div><small>Save file</small><b>#0142 · 2P</b></div></div>
-      <div class="stat"><div class="ico">${I.clock}</div><div><small>Time played</small><b data-clock>${clockText()}</b></div></div>
-      <div class="stat"><div class="ico ok">${I.split}</div><div><small>Fee split</small><b>50 / 50</b></div></div>
-      ${route === 'session' ? '' : '<button class="btn btn-primary btn-block" type="button" data-go="session">Open save file</button>'}`;
-  }
-  return `
-    <h3>Your seat</h3>
-    <div class="stat"><div class="ico">${I.plug}</div><div><small>Port 2</small><b>Empty</b></div></div>
-    <div class="stat"><div class="ico amber">${I.coin}</div><div><small>You bring</small><b>${fmt(parseFloat(state.amount) || 0)} NIMORI</b></div></div>
-    <div class="stat"><div class="ico ok">${I.star}</div><div><small>Staked</small><b>${STAKE.staked ? fmt(STAKE.staked) + ' NIMORI' : '—'}</b></div></div>
-    ${route === 'lobby' ? '' : '<button class="btn btn-primary btn-block" type="button" data-go="lobby">Go to the lobby</button>'}`;
-}
-
 const ROUTES = { lobby, session, arcade, docs };
 
 // ---------- console screen content (drawn inside the 3D scene, never an HTML overlay) ----------
@@ -345,10 +334,13 @@ function screenFor(route) {
 }
 
 // ---------- router ----------
-// Lobby: console closed. Session opens it once the 2nd cable is in. Arcade and Docs open it too.
-const page = $('#page');
-const sideEl = $('#side');
+// Lobby: console closed, page in the side panel.
+// Session (once 2P is plugged in), Arcade, Docs: the lid opens and the page sits on the console screen.
+// Phones: the screen is too small for a page, so it shows a title card and the page stays below.
+const panel = $('#screen');
+const crtBody = $('[data-crt-body]', crtEl);
 let clockTimer = 0;
+let wasDesktop = window.innerWidth >= 1000;
 const routeName = () => {
   const name = (location.hash.replace(/^#\/?/, '').split('/')[0]) || 'lobby';
   return ROUTES[name] ? name : 'lobby';
@@ -357,30 +349,46 @@ const lidOpenFor = (route) => route === 'arcade' || route === 'docs' || (route =
 
 function render() {
   const route = routeName();
-  const open = lidOpenFor(route);
-  page.innerHTML = ROUTES[route]();
-  sideEl.innerHTML = side(route);
-  $$('.tabs a').forEach((a) => (a.dataset.route === route ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')));
-  document.title = `NIMORI · ${route[0].toUpperCase() + route.slice(1)}`;
-  scene?.setDifficulty(state.difficulty);
+  const desktop = window.innerWidth >= 1000;
+  const open = !!scene && lidOpenFor(route);
+  const onScreen = open && desktop;
+  document.body.dataset.mode = onScreen ? 'screen' : 'panel';
   scene?.setLid(open);
   scene?.setView(open ? 'screen' : route);
-  if (open) scene?.setScreen(screenFor(route));
+  scene?.setDifficulty(state.difficulty);
+  scene?.setOverlay(onScreen);
+  if (open) scene?.setScreen(onScreen ? {} : screenFor(route));
+  scene?.relayout();
+
+  const html = ROUTES[route]();
+  const clean = route !== 'lobby';
+  panel.classList.toggle('clean', clean && !onScreen);
+  panel.innerHTML = onScreen ? '' : html;
+  crtBody.innerHTML = onScreen ? html : '';
+  crtBody.scrollTop = 0;
+  panel.scrollTop = 0;
+  const root = onScreen ? crtBody : panel;
+  $$('.tabs a').forEach((a) => (a.dataset.route === route ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')));
+  document.title = `NIMORI · ${route[0].toUpperCase() + route.slice(1)}`;
   setHud();
-  bind(page);
-  bind(sideEl);
+  bind(root);
   clearInterval(clockTimer);
   if (state.plugged) {
     clockTimer = setInterval(() => {
       $$('[data-clock]').forEach((el) => { el.textContent = clockText(); });
-      if (route === 'session') scene?.setScreen(screenFor(route));
+      if (route === 'session' && !onScreen && open) scene?.setScreen(screenFor(route));
     }, 1000);
   }
 }
+window.addEventListener('resize', () => {
+  const d = window.innerWidth >= 1000;
+  if (d !== wasDesktop) { wasDesktop = d; render(); }
+});
 
 function setHud() {
   $('#hud').classList.toggle('ok', state.plugged);
-  $('#hud-label').textContent = state.plugged ? 'Player 2 connected · session live' : 'Waiting for player 2';
+  $('#hud-label').textContent = state.plugged ? 'player 2 connected · session live' : 'waiting for player 2';
+  $('#hud-bar').textContent = state.plugged ? '▮▮▮▮▮' : '▮▮▮▯▯';
 }
 
 function bind(root) {
@@ -517,7 +525,7 @@ $('[data-connect]').addEventListener('click', () => openModal({
   body: `<div class="wallets">${['MetaMask', 'Rabby', 'Coinbase Wallet', 'WalletConnect'].map((w) => `<button type="button" disabled>${w}<small>Soon</small></button>`).join('')}</div>`,
   cancel: 'Close',
 }));
-window.addEventListener('hashchange', () => { render(); window.scrollTo({ top: 0 }); });
+window.addEventListener('hashchange', render);
 if (!location.hash) history.replaceState(null, '', '#/lobby');
 document.fonts?.ready.then(() => { const r = routeName(); if (lidOpenFor(r)) scene?.setScreen(screenFor(r)); });
 render();

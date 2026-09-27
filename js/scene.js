@@ -118,7 +118,7 @@ function coiledCurve(points, { pitch = 0.07, coilR = 0.07, lead = 0.35, samplesP
 }
 
 // ---------- scene ----------
-export function createScene(mount) {
+export function createScene(mount, overlayEl = null) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -339,7 +339,7 @@ export function createScene(mount) {
   slot.position.set(0, topY + 0.055, 0.3);
   console3d.add(slot);
 
-  // screen content: a canvas texture drawn in the scene (no HTML overlay, so it can never drift off the screen)
+  // screen picture: a canvas texture (title card on phones, glow behind the HTML page on desktop)
   const scrCanvas = document.createElement('canvas');
   scrCanvas.width = 1024; scrCanvas.height = Math.round(1024 * scrH / scrW);
   const scrTex = new THREE.CanvasTexture(scrCanvas);
@@ -352,30 +352,50 @@ export function createScene(mount) {
   function drawScreen({ title = '', big = '', lines = [] } = {}) {
     const g = scrCanvas.getContext('2d');
     const w = scrCanvas.width, h = scrCanvas.height;
-    const bgGrad = g.createRadialGradient(w * 0.5, h * 0.4, 20, w * 0.5, h * 0.5, w * 0.7);
-    bgGrad.addColorStop(0, '#3d0907'); bgGrad.addColorStop(1, '#0e0202');
-    g.fillStyle = bgGrad; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#fff8ec'; g.fillRect(0, 0, w, h);
     g.textAlign = 'left'; g.textBaseline = 'alphabetic';
-    g.fillStyle = '#f3ae15'; g.font = '700 26px "IBM Plex Mono", monospace';
-    g.fillText('NIMORI OS', 40, 56);
-    g.fillStyle = 'rgba(254,243,213,.6)'; g.textAlign = 'right';
-    g.fillText(title, w - 40, 56);
-    g.fillStyle = 'rgba(243,174,21,.25)'; g.fillRect(40, 76, w - 80, 2);
+    g.fillStyle = '#e60211'; g.font = '800 28px "Plus Jakarta Sans", sans-serif';
+    g.fillText('NIMORI', 40, 60);
+    g.fillStyle = '#8f7c70'; g.textAlign = 'right'; g.font = '700 22px "Plus Jakarta Sans", sans-serif';
+    g.fillText(title, w - 40, 58);
+    g.fillStyle = '#f1e4cf'; g.fillRect(40, 82, w - 80, 2);
     g.textAlign = 'center';
-    let size = 150;
+    let size = 140;
     g.font = `800 ${size}px "Plus Jakarta Sans", sans-serif`;
-    while (g.measureText(big).width > w - 120 && size > 40) { size -= 6; g.font = `800 ${size}px "Plus Jakarta Sans", sans-serif`; }
-    g.shadowColor = 'rgba(243,174,21,.55)'; g.shadowBlur = 30;
-    g.fillStyle = '#fef3d5';
-    g.fillText(big, w / 2, h * 0.56);
-    g.shadowBlur = 0;
-    g.font = '700 28px "IBM Plex Mono", monospace';
-    lines.forEach((l, i) => { g.fillStyle = i ? 'rgba(254,243,213,.7)' : '#f3ae15'; g.fillText(l, w / 2, h * 0.72 + i * 42); });
-    g.fillStyle = 'rgba(0,0,0,.16)';
-    for (let y = 0; y < h; y += 4) g.fillRect(0, y, w, 2); // scanlines
+    while (big && g.measureText(big).width > w - 120 && size > 40) { size -= 6; g.font = `800 ${size}px "Plus Jakarta Sans", sans-serif`; }
+    g.fillStyle = '#1e1512';
+    if (big) g.fillText(big, w / 2, h * 0.58);
+    g.font = '700 28px "Plus Jakarta Sans", sans-serif';
+    lines.forEach((l, i) => { g.fillStyle = i ? '#8f7c70' : '#e60211'; g.fillText(l, w / 2, h * 0.74 + i * 40); });
     scrTex.needsUpdate = true;
   }
   drawScreen();
+
+  // Desktop: the page is a normal 2D HTML element laid over the screen. Each frame the 4 screen corners are
+  // projected and the element is fitted inside them. No CSS 3D transforms, so it cannot drift or blur.
+  const scrCorners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => new THREE.Vector3(sx * scrW / 2, sy * scrH / 2, 0));
+  const tmpV = new THREE.Vector3();
+  let overlayOn = false;
+  function trackOverlay(lidAmount) {
+    if (!overlayEl) return;
+    const vis = overlayOn ? smooth(0.93, 1, lidAmount) : 0;
+    overlayEl.style.opacity = vis.toFixed(3);
+    overlayEl.style.visibility = vis > 0.01 ? 'visible' : 'hidden';
+    overlayEl.inert = vis < 0.9;
+    if (vis <= 0.01) return;
+    const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight;
+    const xs = [], ys = [];
+    scrCorners.forEach((c) => {
+      tmpV.copy(c); screenMesh.localToWorld(tmpV); tmpV.project(camera);
+      xs.push((tmpV.x + 1) / 2 * w); ys.push((1 - tmpV.y) / 2 * h);
+    });
+    xs.sort((a, b) => a - b); ys.sort((a, b) => a - b);
+    const inset = 4;
+    const L = xs[1] + inset, R = xs[2] - inset, T = ys[1] + inset, B = ys[2] - inset;
+    overlayEl.style.transform = `translate(${L.toFixed(1)}px, ${T.toFixed(1)}px)`;
+    overlayEl.style.width = Math.max(0, R - L).toFixed(1) + 'px';
+    overlayEl.style.height = Math.max(0, B - T).toFixed(1) + 'px';
+  }
 
   // ---------- front: controller ports ----------
   const portY = 0.47;
@@ -562,10 +582,10 @@ export function createScene(mount) {
 
   // camera framings per screen: [position, target]
   const VIEWS = {
-    lobby: [new THREE.Vector3(1.7, 2.7, 8.8), new THREE.Vector3(-0.15, 0.3, 0.7)],
+    lobby: [new THREE.Vector3(2.4, 2.9, 10.2), new THREE.Vector3(0.1, 0.28, 0.8)],
     session: [new THREE.Vector3(-1.6, 7.6, 7.4), new THREE.Vector3(0.0, 0.5, 0.3)],
     // lid open, straight at the screen (screen centre is about (0, 2.0, -1.32), normal (0, .26, .97))
-    screen: [new THREE.Vector3(0.0, 4.45, 8.1), new THREE.Vector3(0.0, 1.5, -1.3)],
+    screen: [new THREE.Vector3(0.0, 3.62, 4.75), new THREE.Vector3(0.0, 1.9, -1.32)],
     docs: [new THREE.Vector3(-7.2, 4.6, 9.0), new THREE.Vector3(-0.2, 0.4, 0.6)],
   };
   const camPos = VIEWS.lobby[0].clone();
@@ -581,10 +601,14 @@ export function createScene(mount) {
     const h = mount.clientHeight || window.innerHeight;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
-    // the console lives in its own card: frame it by the card's aspect
-    layout.distScale = Math.max(1, 1.05 / camera.aspect);
-    layout.offsetX = 0;
-    camera.clearViewOffset();
+    // keep the console framed on narrow/tall viewports
+    const panel = document.querySelector('[data-panel]');
+    const desktop = window.innerWidth >= 1000;
+    layout.distScale = desktop ? Math.max(1, 1.05 / camera.aspect) : Math.max(0.84, 1.05 / camera.aspect);
+    const panelShown = panel && document.body.dataset.mode !== 'screen';
+    layout.offsetX = desktop && panelShown ? Math.round((panel.getBoundingClientRect().width + 24) / 2) : 0;
+    if (layout.offsetX) camera.setViewOffset(w, h, layout.offsetX, 0, w, h);
+    else camera.clearViewOffset();
     camera.updateProjectionMatrix();
   }
   new ResizeObserver(resize).observe(mount);
@@ -602,12 +626,19 @@ export function createScene(mount) {
 
     // camera: ease toward the screen's framing, add slow idle drift + a hint of pointer parallax
     const [vp, vt] = VIEWS[state.view] || VIEWS.lobby;
-    const k = 1 - Math.exp(-dt * 2.2);
-    tmpPos.copy(vp).sub(vt).multiplyScalar(layout.distScale).add(vt);
+    // real elapsed time (not the per-frame capped dt): on a slow device the camera and the lid
+    // still settle on time, instead of moving in slow motion
+    const nowMs = performance.now();
+    const realDt = Math.min((nowMs - (state.lidAt || nowMs)) / 1000, 0.5);
+    state.lidAt = nowMs;
+    const k = 1 - Math.exp(-realDt * 2.2);
+    // narrow cards (phones): step back so the whole open screen fits
+    const near = state.view === 'screen' && camera.aspect < 1.3 ? 1.5 : 1;
+    tmpPos.copy(vp).sub(vt).multiplyScalar(layout.distScale * near).add(vt);
     camPos.lerp(tmpPos, k);
     camTgt.lerp(vt, k);
     // almost still while a page is on the screen, so its text stays sharp and easy to click
-    const drift = state.view === 'screen' ? 0.12 : 1;
+    const drift = state.view === 'screen' ? 0 : 1;
     camera.position.set(
       camPos.x + (Math.sin(t * 0.13) * 0.35 + pointer.x * 0.25) * drift,
       camPos.y + (Math.sin(t * 0.09) * 0.12 - pointer.y * 0.12) * drift,
@@ -617,12 +648,12 @@ export function createScene(mount) {
 
     // lid: opens on Arcade (about 105 degrees, laptop-style), closes elsewhere
     const lidGoal = state.lidGoal;
-    state.lid += (lidGoal - state.lid) * (1 - Math.exp(-dt * (lidGoal ? 2.6 : 4)));
+    state.lid += (lidGoal - state.lid) * (1 - Math.exp(-realDt * (lidGoal ? 2.6 : 4)));
     if (Math.abs(lidGoal - state.lid) < 0.0005) state.lid = lidGoal;
     const open = easeInOut(state.lid);
     lid.rotation.x = -open * 1.83;
     const lit = smooth(0.7, 1, state.lid);
-    screenMat.emissiveIntensity = 0.15 + lit * 1.05;
+    screenMat.emissiveIntensity = 0.1 + lit * 0.9;
     screenGlow.intensity = lit * 1.4;
     slotMat.emissiveIntensity = lit * (1.6 + Math.sin(t * 2.4) * 0.4);
 
@@ -667,6 +698,7 @@ export function createScene(mount) {
     });
 
     renderer.render(scene, camera);
+    trackOverlay(state.lid);
   }
   renderer.setAnimationLoop(frame);
 
@@ -674,6 +706,7 @@ export function createScene(mount) {
     setView(v) { state.view = VIEWS[v] ? v : 'lobby'; },
     setLid(open) { state.lidGoal = open ? 1 : 0; },
     setScreen: drawScreen,
+    setOverlay(on) { overlayOn = !!on; },
     setDifficulty(d) { state.difficulty = RANGES[d] ? d : 'normal'; },
     plug2P() {
       if (state.plugged) return;
