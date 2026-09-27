@@ -8,9 +8,9 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%23E60211%22/%3E%3Ccircle cx=%2224%22 cy=%2216%22 r=%224%22 fill=%22%23FF7A1A%22/%3E%3Crect x=%226%22 y=%2212%22 width=%2210%22 height=%228%22 rx=%222%22 fill=%22%23FEF3D5%22/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Rubik:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;700&display=swap" rel="stylesheet">
   <link rel="preload" as="image" href="img/wordmark.webp">
-  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/app.css?v=5">
   <script type="importmap">
   {
     "imports": {
@@ -21,41 +21,41 @@
   </script>
 </head>
 <body>
-  <header class="topbar">
-    <a class="wordmark" href="#/lobby" aria-label="NIMORI home"><img src="img/wordmark.webp" alt="NIMORI" width="637" height="156"></a>
-    <nav class="tabs" aria-label="Screens">
-      <a href="#/lobby" data-route="lobby">Lobby</a>
-      <a href="#/session" data-route="session">Session</a>
-      <a href="#/arcade" data-route="arcade">Arcade</a>
-      <a href="#/docs" data-route="docs">Docs</a>
-    </nav>
-    <div class="topbar-right">
-      <span class="pill chain"><i></i>Robinhood Chain</span>
-      <span class="pill demo">DEMO · simulated data</span>
-      <button class="btn btn-small" type="button" data-connect>Connect wallet</button>
-    </div>
-  </header>
+  <div class="shell">
+    <header class="nav">
+      <a class="wordmark" href="#/lobby" aria-label="NIMORI home"><img src="img/wordmark.webp" alt="NIMORI" width="637" height="156"></a>
+      <nav class="tabs" aria-label="Pages">
+        <a href="#/lobby" data-route="lobby"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01M17.3 5H6.7a4 4 0 0 0-3.96 3.46l-.74 5.3A3 3 0 0 0 7.1 16.6l1.4-1.6h7l1.4 1.6a3 3 0 0 0 5.1-2.84l-.74-5.3A4 4 0 0 0 17.3 5z"/></svg>Lobby</a>
+        <a href="#/session" data-route="session"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8V3M7 21v-7h10v7"/></svg>Session</a>
+        <a href="#/arcade" data-route="arcade"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4"/></svg>Arcade</a>
+        <a href="#/docs" data-route="docs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>Docs</a>
+      </nav>
+      <div class="nav-right">
+        <span class="chip chain"><i></i>Robinhood Chain</span>
+        <span class="chip demo">Demo · simulated</span>
+        <button class="btn btn-primary" type="button" data-connect>Connect wallet</button>
+      </div>
+    </header>
 
-  <!-- persistent stage: the single WebGL canvas lives here, outside the router outlet -->
-  <div class="stage" id="stage">
-    <div class="stage-vignette"></div>
-    <div class="hud" id="hud" aria-live="polite">
-      <span class="hud-label" id="hud-label">waiting for player 2</span>
-      <span class="hud-bar" id="hud-bar">▮▮▮▯▯</span>
-    </div>
-    <div class="matched" id="matched" aria-hidden="true">
-      <div class="matched-word">MATCHED</div>
-      <div class="matched-sub">session started</div>
-    </div>
+    <main class="main">
+      <section class="page" id="page" tabindex="-1"></section>
+
+      <aside class="side">
+        <!-- persistent 3D console: lives outside the router outlet, never re-created -->
+        <div class="console-card">
+          <div class="stage" id="stage">
+            <div class="matched" id="matched" aria-hidden="true"><b>Matched</b><span>session started</span></div>
+          </div>
+          <div class="hud" id="hud" aria-live="polite"><span class="dot"></span><span id="hud-label">Waiting for player 2</span></div>
+        </div>
+        <div class="card side-card" id="side"></div>
+      </aside>
+    </main>
   </div>
-
-  <main class="outlet">
-    <section class="panel" data-panel id="screen" tabindex="-1"></section>
-  </main>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <div class="modal" id="modal" hidden><div class="modal-card" id="modalCard" role="dialog" aria-modal="true" aria-labelledby="modalTitle"></div></div>
 
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/app.js?v=5"></script>
 </body>
 </html>

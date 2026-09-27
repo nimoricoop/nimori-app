@@ -2,7 +2,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
 const smoothGeo = (g, a = Math.PI / 3) => toCreasedNormals(g, a);
 
 const C = {
@@ -119,7 +118,7 @@ function coiledCurve(points, { pitch = 0.07, coilR = 0.07, lead = 0.35, samplesP
 }
 
 // ---------- scene ----------
-export function createScene(mount, screenEl = null) {
+export function createScene(mount) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -340,25 +339,43 @@ export function createScene(mount, screenEl = null) {
   slot.position.set(0, topY + 0.055, 0.3);
   console3d.add(slot);
 
-  // HTML staking UI on the screen (CSS3D): real inputs and buttons, drawn in the same camera
-  let css = null, cssObj = null;
-  if (screenEl) {
-    css = new CSS3DRenderer();
-    css.domElement.className = 'css3d';
-    mount.appendChild(css.domElement);
-    cssObj = new CSS3DObject(screenEl);
-    setScreenPx(640);
-    cssObj.rotation.x = Math.PI / 2;
-    cssObj.position.set(0, -0.094, scrZ);
-    lid.add(cssObj);
+  // screen content: a canvas texture drawn in the scene (no HTML overlay, so it can never drift off the screen)
+  const scrCanvas = document.createElement('canvas');
+  scrCanvas.width = 1024; scrCanvas.height = Math.round(1024 * scrH / scrW);
+  const scrTex = new THREE.CanvasTexture(scrCanvas);
+  scrTex.colorSpace = THREE.SRGBColorSpace;
+  scrTex.anisotropy = 8;
+  screenMat.map = scrTex;
+  screenMat.emissiveMap = scrTex;
+  screenMat.emissive.set(0xffffff);
+  screenMat.color.set(0x000000);
+  function drawScreen({ title = '', big = '', lines = [] } = {}) {
+    const g = scrCanvas.getContext('2d');
+    const w = scrCanvas.width, h = scrCanvas.height;
+    const bgGrad = g.createRadialGradient(w * 0.5, h * 0.4, 20, w * 0.5, h * 0.5, w * 0.7);
+    bgGrad.addColorStop(0, '#3d0907'); bgGrad.addColorStop(1, '#0e0202');
+    g.fillStyle = bgGrad; g.fillRect(0, 0, w, h);
+    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    g.fillStyle = '#f3ae15'; g.font = '700 26px "IBM Plex Mono", monospace';
+    g.fillText('NIMORI OS', 40, 56);
+    g.fillStyle = 'rgba(254,243,213,.6)'; g.textAlign = 'right';
+    g.fillText(title, w - 40, 56);
+    g.fillStyle = 'rgba(243,174,21,.25)'; g.fillRect(40, 76, w - 80, 2);
+    g.textAlign = 'center';
+    let size = 150;
+    g.font = `800 ${size}px "Plus Jakarta Sans", sans-serif`;
+    while (g.measureText(big).width > w - 120 && size > 40) { size -= 6; g.font = `800 ${size}px "Plus Jakarta Sans", sans-serif`; }
+    g.shadowColor = 'rgba(243,174,21,.55)'; g.shadowBlur = 30;
+    g.fillStyle = '#fef3d5';
+    g.fillText(big, w / 2, h * 0.56);
+    g.shadowBlur = 0;
+    g.font = '700 28px "IBM Plex Mono", monospace';
+    lines.forEach((l, i) => { g.fillStyle = i ? 'rgba(254,243,213,.7)' : '#f3ae15'; g.fillText(l, w / 2, h * 0.72 + i * 42); });
+    g.fillStyle = 'rgba(0,0,0,.16)';
+    for (let y = 0; y < h; y += 4) g.fillRect(0, y, w, 2); // scanlines
+    scrTex.needsUpdate = true;
   }
-
-  function setScreenPx(pxW) {
-    if (!cssObj) return;
-    cssObj.scale.setScalar(scrW / pxW);
-    screenEl.style.width = pxW + 'px';
-    screenEl.style.height = Math.round(pxW * scrH / scrW) + 'px';
-  }
+  drawScreen();
 
   // ---------- front: controller ports ----------
   const portY = 0.47;
@@ -545,10 +562,10 @@ export function createScene(mount, screenEl = null) {
 
   // camera framings per screen: [position, target]
   const VIEWS = {
-    lobby: [new THREE.Vector3(2.4, 2.9, 10.2), new THREE.Vector3(0.1, 0.28, 0.8)],
+    lobby: [new THREE.Vector3(1.7, 2.7, 8.8), new THREE.Vector3(-0.15, 0.3, 0.7)],
     session: [new THREE.Vector3(-1.6, 7.6, 7.4), new THREE.Vector3(0.0, 0.5, 0.3)],
     // lid open, straight at the screen (screen centre is about (0, 2.0, -1.32), normal (0, .26, .97))
-    screen: [new THREE.Vector3(0.0, 4.25, 7.0), new THREE.Vector3(0.0, 1.62, -1.4)],
+    screen: [new THREE.Vector3(0.0, 4.45, 8.1), new THREE.Vector3(0.0, 1.5, -1.3)],
     docs: [new THREE.Vector3(-7.2, 4.6, 9.0), new THREE.Vector3(-0.2, 0.4, 0.6)],
   };
   const camPos = VIEWS.lobby[0].clone();
@@ -563,18 +580,12 @@ export function createScene(mount, screenEl = null) {
     const w = mount.clientWidth || window.innerWidth;
     const h = mount.clientHeight || window.innerHeight;
     renderer.setSize(w, h, false);
-    css?.setSize(w, h);
     camera.aspect = w / h;
-    // keep the console framed on narrow/tall viewports
-    const panel = document.querySelector('[data-panel]');
-    const desktop = window.innerWidth >= 1000;
-    layout.distScale = desktop ? Math.max(1, 1.05 / camera.aspect) : Math.max(0.84, 1.05 / camera.aspect);
-    const panelShown = panel && document.body.dataset.mode !== 'screen';
-    layout.offsetX = desktop && panelShown ? Math.round((panel.getBoundingClientRect().width + 24) / 2) : 0;
-    if (layout.offsetX) camera.setViewOffset(w, h, layout.offsetX, 0, w, h);
-    else camera.clearViewOffset();
+    // the console lives in its own card: frame it by the card's aspect
+    layout.distScale = Math.max(1, 1.05 / camera.aspect);
+    layout.offsetX = 0;
+    camera.clearViewOffset();
     camera.updateProjectionMatrix();
-    // CSS3DRenderer (r170) reads camera.view itself, so the screen UI follows the same offset
   }
   new ResizeObserver(resize).observe(mount);
   window.addEventListener('resize', resize);
@@ -611,14 +622,9 @@ export function createScene(mount, screenEl = null) {
     const open = easeInOut(state.lid);
     lid.rotation.x = -open * 1.83;
     const lit = smooth(0.7, 1, state.lid);
-    screenMat.emissiveIntensity = 1 + lit * 1.5;
+    screenMat.emissiveIntensity = 0.15 + lit * 1.05;
     screenGlow.intensity = lit * 1.4;
     slotMat.emissiveIntensity = lit * (1.6 + Math.sin(t * 2.4) * 0.4);
-    if (screenEl) {
-      screenEl.style.opacity = lit.toFixed(3);
-      screenEl.style.visibility = lit > 0.02 ? 'visible' : 'hidden';
-      screenEl.inert = lit < 0.9;
-    }
 
     // 2P plug animation
     if (state.plugged && state.plugT < 1) {
@@ -661,14 +667,13 @@ export function createScene(mount, screenEl = null) {
     });
 
     renderer.render(scene, camera);
-    if (css && (state.lid > 0.01)) css.render(scene, camera);
   }
   renderer.setAnimationLoop(frame);
 
   return {
     setView(v) { state.view = VIEWS[v] ? v : 'lobby'; },
     setLid(open) { state.lidGoal = open ? 1 : 0; },
-    setScreenPx,
+    setScreen: drawScreen,
     setDifficulty(d) { state.difficulty = RANGES[d] ? d : 'normal'; },
     plug2P() {
       if (state.plugged) return;
