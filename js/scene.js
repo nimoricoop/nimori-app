@@ -352,21 +352,23 @@ export function createScene(mount, overlayEl = null, { onBootStart = null, onBoo
   function drawScreen({ title = '', big = '', lines = [] } = {}) {
     const g = scrCanvas.getContext('2d');
     const w = scrCanvas.width, h = scrCanvas.height;
-    g.fillStyle = '#fff8ec'; g.fillRect(0, 0, w, h);
-    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
-    g.fillStyle = '#e60211'; g.font = '800 28px "Plus Jakarta Sans", sans-serif';
-    g.fillText('NIMORI', 40, 60);
-    g.fillStyle = '#8f7c70'; g.textAlign = 'right'; g.font = '700 22px "Plus Jakarta Sans", sans-serif';
-    g.fillText(title, w - 40, 58);
-    g.fillStyle = '#f1e4cf'; g.fillRect(40, 82, w - 80, 2);
+    const bgGrad = g.createRadialGradient(w * 0.5, h * 0.35, 20, w * 0.5, h * 0.5, w * 0.7);
+    bgGrad.addColorStop(0, '#2a0405'); bgGrad.addColorStop(1, '#120202');
+    g.fillStyle = bgGrad; g.fillRect(0, 0, w, h);
+    g.textBaseline = 'alphabetic';
+    g.font = '22px "Press Start 2P", monospace';
+    g.textAlign = 'left'; g.fillStyle = '#f3ae15'; g.fillText('NIMORI OS', 40, 62);
+    g.textAlign = 'right'; g.fillStyle = '#c9a98a'; g.fillText(title, w - 40, 62);
+    g.fillStyle = 'rgba(254,243,213,.25)'; g.fillRect(40, 84, w - 80, 3);
     g.textAlign = 'center';
-    let size = 140;
-    g.font = `800 ${size}px "Plus Jakarta Sans", sans-serif`;
-    while (big && g.measureText(big).width > w - 120 && size > 40) { size -= 6; g.font = `800 ${size}px "Plus Jakarta Sans", sans-serif`; }
-    g.fillStyle = '#1e1512';
-    if (big) g.fillText(big, w / 2, h * 0.58);
-    g.font = '700 28px "Plus Jakarta Sans", sans-serif';
-    lines.forEach((l, i) => { g.fillStyle = i ? '#8f7c70' : '#e60211'; g.fillText(l, w / 2, h * 0.74 + i * 40); });
+    let size = 64;
+    g.font = `${size}px "Press Start 2P", monospace`;
+    while (big && g.measureText(big).width > w - 100 && size > 20) { size -= 4; g.font = `${size}px "Press Start 2P", monospace`; }
+    if (big) { g.fillStyle = '#6a0200'; g.fillText(big, w / 2 + 6, h * 0.56 + 6); g.fillStyle = '#fef3d5'; g.fillText(big, w / 2, h * 0.56); }
+    g.font = '40px "VT323", monospace';
+    lines.forEach((l, i) => { g.fillStyle = i ? '#c9a98a' : '#f3ae15'; g.fillText(l, w / 2, h * 0.74 + i * 44); });
+    g.fillStyle = 'rgba(0,0,0,.2)';
+    for (let y = 0; y < h; y += 4) g.fillRect(0, y, w, 2);
     scrTex.needsUpdate = true;
   }
   drawScreen();
@@ -380,7 +382,7 @@ export function createScene(mount, overlayEl = null, { onBootStart = null, onBoo
   function drawBoot(p) {
     const g = scrCanvas.getContext('2d');
     const w = scrCanvas.width, h = scrCanvas.height;
-    g.fillStyle = '#fff8ec'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#120202'; g.fillRect(0, 0, w, h);
     const e = 1 - Math.pow(1 - Math.min(1, p / 0.35), 3); // logo pops in during the first third
     if (bootLogo.complete && bootLogo.naturalWidth) {
       const lw = w * 0.52 * (0.85 + 0.15 * e), lh = lw * bootLogo.naturalHeight / bootLogo.naturalWidth;
@@ -389,9 +391,9 @@ export function createScene(mount, overlayEl = null, { onBootStart = null, onBoo
       g.globalAlpha = 1;
     }
     const bw = w * 0.4, bh = 14, bx = (w - bw) / 2, by = h * 0.68;
-    g.fillStyle = '#f1e4cf'; g.beginPath(); g.roundRect(bx, by, bw, bh, 7); g.fill();
+    g.fillStyle = '#3a0a08'; g.beginPath(); g.roundRect(bx, by, bw, bh, 7); g.fill();
     g.fillStyle = '#e60211'; g.beginPath(); g.roundRect(bx, by, Math.max(bh, bw * Math.min(1, p)), bh, 7); g.fill();
-    g.fillStyle = '#8f7c70'; g.textAlign = 'center'; g.font = '700 22px "Plus Jakarta Sans", sans-serif';
+    g.fillStyle = '#f3ae15'; g.textAlign = 'center'; g.font = '18px "Press Start 2P", monospace';
     g.fillText(p < 1 ? 'LOADING' : 'READY', w / 2, by + 52);
     scrTex.needsUpdate = true;
   }

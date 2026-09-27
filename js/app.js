@@ -192,147 +192,137 @@ function lobby() {
   `;
 }
 
-function session() {
-  if (!state.plugged) {
-    return `
-      <p class="eyebrow">Session</p>
-      <h1>No save file yet.</h1>
-      <p class="lede">A seat is minted for each side when a match opens a position. Plug in and the console opens on your save file.</p>
-      <div class="card empty-state">
-        <div class="ico">${I.save}</div>
-        <b>Port 2 is empty</b>
-        <p>You bring ${fmt(parseFloat(state.amount) || 0)} NIMORI on ${DIFF[state.difficulty].label}. Head of the 1P queue: ${head()[1]}.</p>
-        <div class="actions" style="width:100%;max-width:440px">
-          <button class="btn btn-primary" type="button" data-plug>${I.plug} Plug in as 2P</button>
-          <button class="btn" type="button" data-go="lobby">Change in the lobby</button>
+// ---------- retro game menu (used by every page drawn on the console screen) ----------
+// Left: a menu list with a blinking cursor. Right: a dialog window for the selected entry.
+// Arrow keys move, Enter selects, mouse works too. An entry with `action` runs it when chosen again or on Enter.
+const MENU_SEL = { session: 0, arcade: 0, docs: 0, draw: 0 };
+const MENUS = {};
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const dots = (k, v) => `<div class="gm-kv"><span>${k}</span><i></i><b>${v}</b></div>`;
+const gbtn = (label, attrs = '', kind = '') => `<button type="button" class="gb ${kind}" ${attrs}>${label}</button>`;
+
+function gameMenu(route, { title, status = '', items }) {
+  MENUS[route] = items;
+  let sel = Math.min(MENU_SEL[route] || 0, items.length - 1);
+  if (items[sel]?.disabled) sel = Math.max(0, items.findIndex((it) => !it.disabled));
+  MENU_SEL[route] = sel;
+  const it = items[sel];
+  return `
+    <div class="gm" data-gm="${route}">
+      <div class="gm-head"><span class="gm-title">${title}</span><span class="gm-status">${status}</span></div>
+      <div class="gm-body">
+        <ul class="gm-menu" role="menu" aria-label="${esc(title)} menu">
+          ${items.map((m, i) => `<li><button type="button" role="menuitem" class="gm-item ${i === sel ? 'sel' : ''}" data-mi="${i}" ${m.disabled ? 'disabled' : ''}>${m.label}</button></li>`).join('')}
+        </ul>
+        <div class="gm-win" data-gmwin>
+          <div class="gm-win-title">${it.label}</div>
+          ${it.body()}
         </div>
       </div>
-      ${moverRule()}
-    `;
+      <div class="gm-foot"><span>▲▼ MOVE</span><span>ENTER SELECT</span><span>${state.plugged ? 'P2 ●' : 'P2 ○'}</span></div>
+    </div>`;
+}
+
+function session() {
+  if (!state.plugged) {
+    return gameMenu('session', {
+      title: 'SESSION',
+      status: 'NO SAVE FILE',
+      items: [
+        { label: 'PLUG IN', body: () => `<p class="gm-text">Port 2 is empty. You bring ${fmt(parseFloat(state.amount) || 0)} NIMORI on ${DIFF[state.difficulty].label.toUpperCase()}. The head of the 1P queue brings ${head()[1]}.</p>${gbtn('▶ PLUG IN AS 2P', 'data-plug', 'go')}`, action: confirmPlug },
+        { label: 'LOBBY', body: () => `<p class="gm-text">Change the amount or the difficulty before you plug in.</p>${gbtn('▶ GO TO LOBBY', 'data-go="lobby"')}`, action: () => { location.hash = '#/lobby'; } },
+        { label: 'MOVER RULE', body: moverRule },
+      ],
+    });
   }
   const unlocked = sessionAge() >= DAY;
-  return `
-    <p class="eyebrow">Session · NIMORI / ETH · ${DIFF[state.difficulty].label}</p>
-    <h1>Save file #0142</h1>
-    <p class="lede">Your seat is an ERC-721. Sell it and the buyer inherits the session.</p>
-
-    <div class="card save" style="margin-top:22px">
-      <div class="save-head"><div class="ico amber">${I.save}</div><div><b>Seat 2P</b><span class="muted">NIMORI side · partner 1P ${head()[0]}</span></div><span class="tag">Live</span></div>
-      <dl class="kv">
-        <dt>Your deposit</dt><dd>${fmt(parseFloat(state.amount) || 0)} NIMORI</dd>
-        <dt>Partner deposit</dt><dd>${head()[1]}</dd>
-        <dt>Entry prices</dt><dd>ETH $${fmt(SIM.ethUsd)} · NIMORI $${SIM.tokenUsd.toFixed(2)} (sim.)</dd>
-        <dt>Range</dt><dd>${DIFF[state.difficulty].label} ${rangeViz(state.difficulty)}</dd>
-      </dl>
-      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--c-ink-3)"><span>Fee split · you 50%</span><span>partner 50%</span></div>
-      <div class="split"><i style="width:50%;background:var(--amber)"></i><i style="width:50%;background:var(--red)"></i></div>
-      <div style="display:flex;justify-content:space-between;align-items:end;gap:10px;margin-top:16px">
-        <div><div class="muted">Time played</div><div class="clock" data-clock>${clockText()}</div></div>
-        <div class="muted" style="text-align:right">${unlocked ? 'Unplug is free now' : 'Unplug unlocks at 24:00:00'}</div>
-      </div>
-      <div class="actions">
-        ${unlocked
-          ? `<button class="btn btn-primary" type="button" data-unplug>${I.exit} Unplug</button><button class="btn" type="button" data-sell>Sell seat</button>`
-          : `<button class="btn" type="button" data-ragequit>Rage quit (−1%)</button><button class="btn" type="button" data-sell>Sell seat</button>`}
-      </div>
-      ${unlocked ? '' : '<p style="margin:12px 0 0"><button class="linkbtn" type="button" data-skip>Demo: skip to 24 h</button></p>'}
-    </div>
-    ${moverRule()}
-  `;
+  return gameMenu('session', {
+    title: 'SAVE FILE #0142',
+    status: `TIME <b data-clock>${clockText()}</b>`,
+    items: [
+      { label: 'SEAT 2P', body: () => `
+        ${dots('SIDE', 'NIMORI · 2P')}
+        ${dots('PARTNER', '1P ' + head()[0])}
+        ${dots('YOUR DEPOSIT', fmt(parseFloat(state.amount) || 0) + ' NIMORI')}
+        ${dots('PARTNER DEPOSIT', head()[1])}
+        ${dots('ENTRY ETH', '$' + fmt(SIM.ethUsd) + ' (SIM)')}
+        ${dots('ENTRY NIMORI', '$' + SIM.tokenUsd.toFixed(2) + ' (SIM)')}
+        ${dots('RANGE', DIFF[state.difficulty].label.toUpperCase())}
+        <p class="gm-text small">Your seat is an ERC-721. Sell it and the buyer inherits the session.</p>` },
+      { label: 'FEE SPLIT', body: () => `
+        <div class="gm-bar"><i style="width:50%"></i></div>
+        ${dots('YOU (2P)', '50%')}${dots('PARTNER (1P)', '50%')}
+        <p class="gm-text small">10% of trading fees go to Arcade stakers first. The scarce side can earn a seat bonus, up to 70/30.</p>` },
+      unlocked
+        ? { label: 'UNPLUG', body: () => `<p class="gm-text">24 h played. Unplugging is free. The mover rule settles both seats.</p>${gbtn('▶ UNPLUG', 'data-unplug', 'go')}`, action: () => openExit(false) }
+        : { label: 'RAGE QUIT', body: () => `<p class="gm-text">Unplug unlocks at 24:00:00. Leaving now costs 1% of your seat, paid to your partner.</p>${gbtn('▶ RAGE QUIT (−1%)', 'data-ragequit', 'warn')}<p class="gm-text small"><button class="gm-link" type="button" data-skip>DEMO: SKIP TO 24 H</button></p>`, action: () => openExit(true) },
+      { label: 'SELL SEAT', body: () => `<p class="gm-text">List your save file on any NFT marketplace. The buyer takes your seat, your share of fees and your side of the mover rule.</p>${gbtn('▶ SELL SEAT', 'data-sell')}` },
+      { label: 'MOVER RULE', body: moverRule },
+    ],
+  });
 }
 function moverRule() {
   return `
-    <h2>At unplug: the mover rule</h2>
-    <ol class="steps">
-      <li><span class="n">1</span><span>Compare each asset's USD move since entry.</span></li>
-      <li><span class="n">2</span><span>The asset that moved more is the <b>mover</b>.</span></li>
-      <li><span class="n">3</span><span>The non-mover gets their deposit back in their own asset, <b>as long as the position covers it</b>.</span></li>
-      <li><span class="n">4</span><span>The mover gets the rest. Each seat then adds its share of fees.</span></li>
+    <ol class="gm-list">
+      <li>Compare each asset's USD move since entry.</li>
+      <li>The asset that moved more is the <b>mover</b>. It carries the IL.</li>
+      <li>The non-mover gets their deposit back, <b>as long as the position covers it</b>.</li>
+      <li>The mover gets the rest. Each seat adds its share of fees.</li>
     </ol>`;
 }
 
 function arcade() {
-  const staking = STAKE.mode === 'stake';
-  return `
-    <p class="eyebrow">Arcade · $NIMORI staking</p>
-    <h1>Stake to play first.</h1>
-    <p class="lede">$NIMORI launched on Pons, the Robinhood Chain launchpad. Staking it is the Arcade.</p>
-
-    <h2>What staking gives you</h2>
-    <div class="perks">
-      <div class="card perk"><div class="ico">${I.split}</div><b>Fee share</b><span>10% of trading fees earned by co-op positions, paid in ETH and pair tokens.</span></div>
-      <div class="card perk"><div class="ico amber">${I.bolt}</div><b>Priority pass</b><span>Stakers get matched first in lobby queues.</span></div>
-      <div class="card perk"><div class="ico ok">${I.vote}</div><b>Pair vote</b><span>Stakers choose which pairs open a lobby.</span></div>
-    </div>
-
-    <h2>Insert coin</h2>
-    <div class="card action">
-      <div class="seg" role="group" aria-label="Stake or unstake">
-        <button type="button" data-smode="stake" aria-pressed="${staking}">Stake</button>
-        <button type="button" data-smode="unstake" aria-pressed="${!staking}">Unstake</button>
-      </div>
-      <label class="field">
-        <input inputmode="decimal" placeholder="0" aria-label="Amount of NIMORI" data-samt>
-        <span class="unit">NIMORI</span>
-        <button type="button" class="max" data-smax>MAX</button>
-      </label>
-      <dl class="kv">
-        <dt>Demo wallet</dt><dd>${fmt(STAKE.wallet)} NIMORI</dd>
-        <dt>Staked</dt><dd>${fmt(STAKE.staked)} NIMORI</dd>
-        <dt>Fee share rate</dt><dd>Depends on real volume</dd>
-      </dl>
-      <button class="btn btn-primary btn-block" type="button" data-sgo>${staking ? 'Stake NIMORI' : 'Unstake NIMORI'}</button>
-      <p class="muted" style="margin:12px 0 0">No APR is shown: there is no live volume yet, so any number would be made up.</p>
-    </div>
-
-    <h2>Next lobby vote</h2>
-    <div class="card action">
-      ${[['WETH / Pair A', 46], ['WETH / Pair B', 31], ['WETH / Pair C', 23]].map(([n, v]) => `
-        <div class="vote"><span>${n}</span><span class="mono">${v}%</span><span class="bar"><i style="width:${v}%"></i></span></div>`).join('')}
-      <p class="muted" style="margin:10px 0 0">Candidate pairs, simulated tallies.</p>
-    </div>
-    <div class="note">${I.info}<span><b>Staking risk.</b> Staked NIMORI is exposed to the token price and to smart contract risk. No audit is claimed here.</span></div>
-  `;
+  const stakeBody = (mode) => () => { STAKE.mode = mode; return `
+    <label class="gm-field">
+      <input inputmode="decimal" placeholder="0" aria-label="Amount of NIMORI" data-samt>
+      <span>NIMORI</span><button type="button" class="gm-max" data-smax>MAX</button>
+    </label>
+    ${dots('DEMO WALLET', fmt(STAKE.wallet))}${dots('STAKED', fmt(STAKE.staked))}${dots('PRIORITY PASS', STAKE.staked ? '<span class="on">ON</span>' : 'OFF')}
+    ${gbtn(mode === 'stake' ? '▶ INSERT COIN' : '◀ CASH OUT', 'data-sgo', 'go')}
+    <p class="gm-text small">No APR shown: there is no live volume yet, so any number would be made up.</p>`; };
+  return gameMenu('arcade', {
+    title: 'ARCADE',
+    status: `STAKED <b>${fmt(STAKE.staked)}</b>`,
+    items: [
+      { label: 'STAKE', body: stakeBody('stake') },
+      { label: 'UNSTAKE', disabled: !STAKE.staked, body: stakeBody('unstake') },
+      { label: 'PERKS', body: () => `
+        <ol class="gm-list">
+          <li><b>FEE SHARE.</b> 10% of co-op trading fees, paid in ETH and pair tokens.</li>
+          <li><b>PRIORITY PASS.</b> Stakers get matched first in lobby queues.</li>
+          <li><b>PAIR VOTE.</b> Stakers choose which pairs open a lobby.</li>
+        </ol>
+        <p class="gm-text small">$NIMORI launched on Pons, the Robinhood Chain launchpad.</p>` },
+      { label: 'PAIR VOTE', body: () => `
+        ${[['WETH / PAIR A', 46], ['WETH / PAIR B', 31], ['WETH / PAIR C', 23]].map(([n, v]) => `<div class="gm-vote"><span>${n}</span><b>${v}%</b><div class="gm-bar"><i style="width:${v}%"></i></div></div>`).join('')}
+        <p class="gm-text small">Candidate pairs, simulated tallies.</p>` },
+      { label: 'RISK', body: () => `<p class="gm-text">Staked NIMORI is exposed to the token price and to smart contract risk. No audit is claimed here.</p>` },
+    ],
+  });
 }
 
 function docs() {
-  return `
-    <p class="eyebrow">Docs</p>
-    <h1>Liquidity, two-player mode.</h1>
-    <p class="lede">Player 1 deposits ETH. Player 2 deposits the token. NIMORI matches them, opens one position on Robinhood Chain and splits the fees between two seats.</p>
-    <nav class="toc" aria-label="Docs sections">
-      <a href="#/docs" data-anchor="d-match">Match</a><a href="#/docs" data-anchor="d-diff">Difficulty</a><a href="#/docs" data-anchor="d-session">Session</a>
-      <a href="#/docs" data-anchor="d-exit">Mover rule</a><a href="#/docs" data-anchor="d-swap">Hot swap</a><a href="#/docs" data-anchor="d-token">$NIMORI</a><a href="#/docs" data-anchor="d-risk">Risks</a>
-    </nav>
-    <div class="card doc">
-      <h2 id="d-match">1. The match</h2>
-      <p>Every pair has two queues: 1P (ETH) and 2P (token). A deposit waits until one arrives on the other side; while waiting it earns nothing and can be withdrawn anytime, free. Matching is FIFO by value at the pool price, with TWAP checked against spot.</p>
-      ${figMatch()}
-      <h2 id="d-diff">2. Difficulty</h2>
-      <p>Both players pick the same range width. Easy is full range, Normal is wide around spot, Hard is narrow.</p>
-      ${figDifficulty()}
-      <h2 id="d-session">3. The session</h2>
-      <p>Each seat is an ERC-721 save file with the entry snapshot and the fee split. Sell it and the buyer inherits the session.</p>
-      ${figTimeline()}
-      <h2 id="d-exit">4. At unplug: the mover rule</h2>
-      <p>Compare each asset's USD move since entry. The one that moved more is the mover and carries the IL. The non-mover gets their deposit back in their own asset, <b>as long as the position covers it</b>.</p>
-      ${figPayouts()}
-      <h2 id="d-swap">5. Hot swap</h2>
-      <p>When one player leaves, the position does not have to close.</p>
-      ${figHotSwap()}
-      <h2 id="d-token">6. $NIMORI and fees</h2>
-      <p>$NIMORI launched on Pons. Pons pools pay no swap fees to LPs, so co-op positions live in NIMORI pools instead.</p>
-      ${figFees()}
-      <h2 id="d-risk">Risks</h2>
-      <ol class="steps">
-        <li><span class="n">!</span><span><b>Smart contracts</b> can have bugs. Audit status is published before deposits open.</span></li>
-        <li><span class="n">!</span><span><b>Mover risk.</b> If your asset moves more than your partner's, you carry the IL.</span></li>
-        <li><span class="n">!</span><span><b>Cap.</b> Past roughly −75% on one asset (full range), the non-mover is not repaid in full.</span></li>
-        <li><span class="n">!</span><span><b>Range (Hard).</b> Narrow positions can go out of range and stop earning.</span></li>
-        <li><span class="n">!</span><span><b>Lobby wait.</b> If the other queue is empty, your deposit earns nothing.</span></li>
-      </ol>
-    </div>
-  `;
+  const page = (text, fig = '') => () => `<p class="gm-text">${text}</p>${fig ? `<div class="gm-fig">${fig}</div>` : ''}`;
+  return gameMenu('docs', {
+    title: 'MANUAL',
+    status: 'HOW TO PLAY',
+    items: [
+      { label: 'THE MATCH', body: page('Player 1 deposits ETH, Player 2 deposits the token. A deposit waits in the lobby until one arrives on the other side; while waiting it earns nothing and can be withdrawn anytime, free.', figMatch()) },
+      { label: 'DIFFICULTY', body: page('Both players pick the same range. Easy is full range, Normal is wide around spot, Hard is narrow: more fees per trade, but it can fall out of range.', figDifficulty()) },
+      { label: 'SESSION', body: page('Each seat is an ERC-721 save file with the entry snapshot and the fee split. Sell it and the buyer inherits the session.', figTimeline()) },
+      { label: 'MOVER RULE', body: page('The asset that moved more since entry carries the IL. The non-mover gets their deposit back in their own asset, as long as the position covers it.', figPayouts()) },
+      { label: 'HOT SWAP', body: page('When one player leaves, a player waiting on the same side and difficulty takes the empty seat. No unwind.', figHotSwap()) },
+      { label: '$NIMORI', body: page('$NIMORI launched on Pons. Pons pools pay no swap fees to LPs, so co-op positions live in NIMORI pools instead.', figFees()) },
+      { label: 'RISKS', body: () => `
+        <ol class="gm-list">
+          <li><b>CONTRACTS</b> can have bugs. Audit status is published before deposits open.</li>
+          <li><b>MOVER RISK.</b> If your asset moves more, you carry the IL.</li>
+          <li><b>CAP.</b> Past about −75% on one asset (full range), the non-mover is not repaid in full.</li>
+          <li><b>RANGE.</b> Hard positions can go out of range and stop earning.</li>
+          <li><b>LOBBY WAIT.</b> An unmatched deposit earns nothing.</li>
+        </ol>` },
+    ],
+  });
 }
 
 // ---------- pre-launch draw ----------
@@ -360,61 +350,47 @@ async function refreshDraw() {
     const j = await drawApi(a ? '?address=' + a : '');
     DRAW.players = j.players;
     DRAW.entry = j.entry || null;
-    if (DRAW.entry) DRAW.rolled = true;
+    if (DRAW.entry) { DRAW.rolled = true; MENU_SEL.draw = 2; }
   } catch { DRAW.players = null; }
   if (routeName() === 'draw') render();
 }
 
 function ticketCard(e, rolling = false) {
   return `
-    <div class="ticket ${rolling ? 'rolling' : ''}" data-ticket>
-      <div class="ticket-top"><img src="img/wordmark.webp" alt="NIMORI"><span>PRE-LAUNCH DRAW</span></div>
-      <div class="ticket-code" data-code>${rolling ? 'NMR-······' : e.ticket.code}</div>
-      <div class="ticket-row"><span>Wallet</span><b>${W.short(e.address)}</b></div>
-      <div class="ticket-row"><span>Cartridge</span><b>${e.ticket.cart}</b></div>
-      <div class="ticket-foot">1 wallet · 1 ticket · waiting for player 2 ▮▮▮▮▯</div>
+    <div class="gm-ticket ${rolling ? 'rolling' : ''}" data-ticket>
+      <div class="gm-ticket-top"><img src="img/wordmark.webp" alt="NIMORI"><span>PRE-LAUNCH DRAW</span></div>
+      <div class="gm-ticket-code" data-code>${rolling ? 'NMR-??????' : e.ticket.code}</div>
+      ${dots('WALLET', W.short(e.address))}${dots('CARTRIDGE', e.ticket.cart.toUpperCase())}
     </div>`;
 }
+const tweetText = (e) => `Plugged in to @nimoricoop 🎮\n\nTicket ${e.ticket.code} · waiting for player 2 ▮▮▮▮▯`;
 
 function draw() {
   const acc = W.account();
   const e = DRAW.entry;
-  const step = e ? 3 : acc ? 2 : 1;
-  return `
-    <p class="eyebrow">Pre-launch · $NIMORI draw</p>
-    <h1>Plug in. Get a ticket.</h1>
-    <p class="lede">Connect a wallet and sign once. It's free and sends nothing. One ticket per wallet; tickets drawn at launch win a $NIMORI airdrop.</p>
-    <div class="draw-count"><span class="dot"></span><b>${DRAW.players ?? '—'}</b> players plugged in</div>
-
-    <div class="card action draw-steps">
-      <div class="dstep ${step > 1 ? 'done' : step === 1 ? 'on' : ''}">
-        <span class="n">1</span><div><b>Connect a wallet</b><small>${acc ? W.short(acc.address) + ' · ' + acc.name : 'Any EVM wallet'}</small></div>
-        ${acc ? `<button class="linkbtn" type="button" data-wdisconnect>Change</button>` : `<button class="btn btn-primary" type="button" data-wconnect>${I.wallet} Connect</button>`}
-      </div>
-      <div class="dstep ${step > 2 ? 'done' : step === 2 ? 'on' : ''}">
-        <span class="n">2</span><div><b>Sign to plug in</b><small>Free signature, no transaction, no approval</small></div>
-        ${step === 2 ? `<button class="btn btn-primary" type="button" data-wsign ${DRAW.busy ? 'disabled' : ''}>${DRAW.busy ? 'Check your wallet…' : I.plug + ' Plug in'}</button>` : ''}
-      </div>
-      <div class="dstep ${step === 3 ? 'on' : ''}">
-        <span class="n">3</span><div><b>Your ticket</b><small>${e ? 'Entered ' + new Date(e.enteredAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Revealed after you plug in'}</small></div>
-      </div>
-      ${DRAW.error ? `<div class="note" style="background:var(--c-red-50)">${I.info}<span>${DRAW.error}</span></div>` : ''}
-      ${e ? `
-        ${ticketCard(e, !DRAW.rolled)}
-        <div class="actions">
-          <button class="btn btn-primary" type="button" data-wshare>${I.x} Share on X</button>
-          <button class="btn" type="button" data-go="docs">How NIMORI works</button>
-        </div>` : ''}
-    </div>
-
-    <h2>How the draw works</h2>
-    <ol class="steps">
-      <li><span class="n">1</span><span><b>One wallet, one ticket.</b> Every ticket has the same odds. The cartridge on your ticket is cosmetic.</span></li>
-      <li><span class="n">2</span><span><b>Drawn at launch, in public.</b> Winners come from a Robinhood Chain block hash announced in advance, so nobody can pick them, us included.</span></li>
-      <li><span class="n">3</span><span><b>Winners get a $NIMORI airdrop</b> after launch. The amount and the number of winners are announced before the draw.</span></li>
-      <li><span class="n">4</span><span><b>Stay safe.</b> The draw never asks for a transaction, an approval or a seed phrase. We never DM first.</span></li>
-    </ol>
-  `;
+  return gameMenu('draw', {
+    title: 'PRE-LAUNCH DRAW',
+    status: `PLAYERS <b>${DRAW.players ?? '—'}</b>`,
+    items: [
+      { label: acc ? 'WALLET ✓' : 'CONNECT', body: () => acc
+          ? `${dots('WALLET', W.short(acc.address))}${dots('APP', esc(acc.name))}<p class="gm-text small">Connecting only reads your address.</p>${gbtn('CHANGE WALLET', 'data-wdisconnect')}`
+          : `<p class="gm-text">Plug a wallet into port 2. Any EVM wallet works. Connecting only reads your address.</p>${gbtn('▶ CONNECT WALLET', 'data-wconnect', 'go')}`,
+        action: acc ? null : openWalletPicker },
+      { label: 'PLUG IN', disabled: !acc, body: () => e
+          ? `<p class="gm-text">This wallet is plugged in. One wallet, one ticket.</p>`
+          : `<p class="gm-text">Sign one free message. No transaction, no approval, nothing leaves your wallet.</p>${gbtn(DRAW.busy ? 'CHECK YOUR WALLET…' : '▶ PLUG IN', `data-wsign ${DRAW.busy ? 'disabled' : ''}`, 'go')}${DRAW.error ? `<p class="gm-text warn">${esc(DRAW.error)}</p>` : ''}`,
+        action: e ? null : doSign },
+      { label: 'MY TICKET', disabled: !e, body: () => `${ticketCard(e, !DRAW.rolled)}${gbtn('▶ SHARE ON X', 'data-wshare', 'go')}` },
+      { label: 'SHARE ON X', disabled: !e, body: () => `<div class="gm-tweet">${esc(tweetText(e)).replace(/\n/g, '<br>')}</div>${gbtn('▶ POST IT', 'data-wshare', 'go')}`, action: shareOnX },
+      { label: 'RULES', body: () => `
+        <ol class="gm-list">
+          <li><b>ONE WALLET, ONE TICKET.</b> Same odds for every ticket. The cartridge is cosmetic.</li>
+          <li><b>DRAWN AT LAUNCH, IN PUBLIC.</b> From a Robinhood Chain block hash announced in advance: nobody can pick the winners, us included.</li>
+          <li><b>WINNERS GET A $NIMORI AIRDROP.</b> Amount and number of winners announced before the draw.</li>
+          <li><b>STAY SAFE.</b> The draw never asks for a transaction, an approval or a seed phrase. We never DM first.</li>
+        </ol>` },
+    ],
+  });
 }
 
 async function doSign() {
@@ -428,6 +404,7 @@ async function doSign() {
     DRAW.entry = { address: j.address, ticket: j.ticket, enteredAt: j.enteredAt };
     DRAW.players = j.players;
     DRAW.rolled = !!j.already;
+    MENU_SEL.draw = 2;
     sfx('coin');
   } catch (err) {
     DRAW.error = /reject|denied|4001/i.test(String(err?.message || err)) ? 'Signature cancelled in the wallet.' : String(err?.message || err);
@@ -435,7 +412,6 @@ async function doSign() {
   }
   DRAW.busy = false;
   render();
-  $('[data-ticket]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   if (DRAW.entry && !DRAW.rolled) rollTicket();
 }
 
@@ -468,7 +444,7 @@ function shareOnX() {
   const e = DRAW.entry;
   if (!e) return;
   const site = /localhost|127\.0\.0\.1/.test(location.hostname) ? '' : '\n\n' + location.origin;
-  const text = `Plugged in to @nimoricoop 🎮\n\nTicket ${e.ticket.code} · waiting for player 2 ▮▮▮▮▯${site}`;
+  const text = tweetText(e) + site;
   window.open('https://x.com/intent/post?text=' + encodeURIComponent(text), '_blank', 'noopener');
 }
 
@@ -493,6 +469,7 @@ W.onChange(() => {
   const btn = $('[data-connect]');
   btn.textContent = a ? W.short(a.address) : 'Connect wallet';
   DRAW.entry = null; DRAW.rolled = false; DRAW.error = '';
+  MENU_SEL.draw = a ? 1 : 0;
   refreshDraw();
   if (routeName() !== 'draw') render();
 });
@@ -541,6 +518,7 @@ function render() {
   const html = ROUTES[route]();
   const clean = route !== 'lobby';
   panel.classList.toggle('clean', clean && !onScreen);
+  panel.classList.toggle('retro', clean && !onScreen);
   panel.innerHTML = onScreen ? '' : html;
   crtBody.innerHTML = onScreen ? html : '';
   crtBody.scrollTop = 0;
@@ -588,11 +566,49 @@ function bind(root) {
     $(`#${a.dataset.anchor}`, root)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }));
   bindStake(root);
+  $$('[data-mi]', root).forEach((b) => b.addEventListener('click', () => menuPick(+b.dataset.mi, true)));
   $('[data-wconnect]', root)?.addEventListener('click', openWalletPicker);
   $('[data-wdisconnect]', root)?.addEventListener('click', () => { W.disconnect(); });
   $('[data-wsign]', root)?.addEventListener('click', doSign);
   $('[data-wshare]', root)?.addEventListener('click', shareOnX);
 }
+
+function menuPick(i, fromClick = false) {
+  const route = routeName();
+  const items = MENUS[route];
+  if (!items || !items[i] || items[i].disabled) return;
+  const again = MENU_SEL[route] === i;
+  MENU_SEL[route] = i;
+  sfx(again && items[i].action ? 'coin' : 'select');
+  if (again && items[i].action) { items[i].action(); return; }
+  render();
+  if (!fromClick) $(`[data-mi="${i}"]`)?.focus();
+}
+function menuMove(d) {
+  const route = routeName();
+  const items = MENUS[route];
+  if (!items) return;
+  let i = MENU_SEL[route];
+  for (let k = 0; k < items.length; k++) {
+    i = (i + d + items.length) % items.length;
+    if (!items[i].disabled) break;
+  }
+  MENU_SEL[route] = i;
+  sfx('blip');
+  render();
+  $(`[data-mi="${i}"]`)?.focus();
+}
+document.addEventListener('keydown', (e) => {
+  if (!$('#modal').hidden || !MENUS[routeName()] || !$('[data-gm]')) return;
+  if (e.target.matches('input, textarea')) return;
+  if (e.key === 'ArrowDown') { e.preventDefault(); menuMove(1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); menuMove(-1); }
+  else if (e.key === 'Enter' && e.target.matches('.gm-item, body')) {
+    e.preventDefault();
+    const it = MENUS[routeName()][MENU_SEL[routeName()]];
+    if (it.action) { sfx('coin'); it.action(); } else $('[data-gmwin] .gb:not([disabled])')?.click();
+  }
+});
 
 function bindStake(root) {
   const amt = $('[data-samt]', root);
