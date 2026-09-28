@@ -83,18 +83,18 @@ function toast(msg, kind = '') {
 let lastFocus = null;
 function openModal({ icon = I.info, tone = '', title, explain = '', rows = [], note = '', body = '', cancel = 'Cancel', confirm = null, onConfirm = null, demo = true }) {
   lastFocus = document.activeElement;
+  // retro arcade dialog: RPG window, pixel title, dotted rows, pixel buttons
   $('#modalCard').innerHTML = `
-    <div class="ico ${tone}">${icon}</div>
-    <h2 id="modalTitle">${title}</h2>
+    <div class="md-head"><span class="md-ico">${icon}</span><h2 id="modalTitle">${String(title).toUpperCase()}</h2></div>
     ${explain ? `<p class="explain">${explain}</p>` : ''}
-    ${rows.length ? `<div class="summary">${rows.map(([k, v]) => `<div class="row"><span>${k}</span><b>${v}</b></div>`).join('')}</div>` : ''}
+    ${rows.length ? `<div class="summary">${rows.map(([k, v]) => `<div class="gm-kv"><span>${k}</span><i></i><b>${v}</b></div>`).join('')}</div>` : ''}
     ${body}
-    ${note ? `<div class="note">${I.info}<span>${note}</span></div>` : ''}
+    ${note ? `<p class="md-note">! ${note}</p>` : ''}
     <div class="row2 ${confirm ? '' : 'single'}">
-      <button class="btn" type="button" data-close>${cancel}</button>
-      ${confirm ? `<button class="btn btn-primary" type="button" data-confirm>${confirm}</button>` : ''}
+      <button class="gb" type="button" data-close>${String(cancel).toUpperCase()}</button>
+      ${confirm ? `<button class="gb go" type="button" data-confirm>▶ ${String(confirm).toUpperCase()}</button>` : ''}
     </div>
-    ${demo ? '<p class="demo-note">Demo · simulated. Nothing is signed or sent.</p>' : ''}`;
+    ${demo ? '<p class="demo-note">DEMO · SIMULATED. NOTHING IS SIGNED OR SENT.</p>' : ''}`;
   $('#modal').hidden = false;
   sfx('open');
   $('[data-close]', $('#modalCard')).addEventListener('click', closeModal);
@@ -170,10 +170,7 @@ function lobby() {
       <span>${state.plugged ? 'MATCHED · save file #0142 minted (simulated)' : 'port 2 empty · waiting for player 2 ▮▮▮▯▯'}</span>
     </div>
 
-    ${state.plugged ? `
-      <button class="btn btn-ok btn-block" type="button" data-go="session">Open your save file →</button>
-      <button class="btn btn-cream btn-block" type="button" data-reset style="margin-top:10px">Reset demo</button>
-    ` : `
+    ${state.plugged ? lobbySession() : `
       <label class="field">
         <input inputmode="decimal" aria-label="Deposit amount in NIMORI" value="${state.amount}" data-amount>
         <span class="unit">NIMORI</span>
@@ -192,10 +189,37 @@ function lobby() {
   `;
 }
 
+// the session, shown in the lobby once the second cable is in
+function lobbySession() {
+  const unlocked = sessionAge() >= DAY;
+  return `
+    <div class="savefile">
+      <div class="savefile-h"><span class="slot">SAVE FILE #0142</span><span class="badge">SEAT 2P</span></div>
+      <dl class="kv">
+        <dt>Partner</dt><dd>1P · ${head()[0]}</dd>
+        <dt>Your deposit</dt><dd>${fmt(parseFloat(state.amount) || 0)} NIMORI</dd>
+        <dt>Partner deposit</dt><dd>${head()[1]}</dd>
+        <dt>Entry prices</dt><dd>$${fmt(SIM.ethUsd)} · $${SIM.tokenUsd.toFixed(2)} (sim.)</dd>
+      </dl>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#c9a98a"><span>fee split · you 50%</span><span>partner 50%</span></div>
+      <div class="split"><i style="width:50%;background:#f3ae15"></i><i style="width:50%;background:#fef3d5"></i></div>
+      <div style="display:flex;justify-content:space-between;align-items:end;gap:10px;margin-top:12px">
+        <div><div style="color:#c9a98a;font-size:12px">time played</div><div class="clock" data-clock>${clockText()}</div></div>
+        <div style="text-align:right;color:#c9a98a;font-size:12px">${unlocked ? 'unplug is free now' : 'unplug unlocks<br>at 24:00:00'}</div>
+      </div>
+    </div>
+    <div class="actions">
+      ${unlocked ? '<button class="btn" type="button" data-unplug>Unplug</button>' : '<button class="btn" type="button" data-ragequit>Rage quit (−1%)</button>'}
+      <button class="btn btn-cream" type="button" data-sell>Sell seat</button>
+    </div>
+    ${unlocked ? '' : '<p style="margin:10px 0 0;text-align:center"><button class="linkbtn" type="button" data-skip>demo: skip to 24 h</button></p>'}
+    <button class="btn btn-cream btn-block" type="button" data-reset style="margin-top:10px">Reset demo</button>`;
+}
+
 // ---------- retro game menu (used by every page drawn on the console screen) ----------
 // Left: a menu list with a blinking cursor. Right: a dialog window for the selected entry.
 // Arrow keys move, Enter selects, mouse works too. An entry with `action` runs it when chosen again or on Enter.
-const MENU_SEL = { session: 0, arcade: 0, docs: 0, draw: 0 };
+const MENU_SEL = { arcade: 0, docs: 0, draw: 0 };
 const MENUS = {};
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const dots = (k, v) => `<div class="gm-kv"><span>${k}</span><i></i><b>${v}</b></div>`;
@@ -223,44 +247,6 @@ function gameMenu(route, { title, status = '', items }) {
     </div>`;
 }
 
-function session() {
-  if (!state.plugged) {
-    return gameMenu('session', {
-      title: 'SESSION',
-      status: 'NO SAVE FILE',
-      items: [
-        { label: 'PLUG IN', body: () => `<p class="gm-text">Port 2 is empty. You bring ${fmt(parseFloat(state.amount) || 0)} NIMORI on ${DIFF[state.difficulty].label.toUpperCase()}. The head of the 1P queue brings ${head()[1]}.</p>${gbtn('▶ PLUG IN AS 2P', 'data-plug', 'go')}`, action: confirmPlug },
-        { label: 'LOBBY', body: () => `<p class="gm-text">Change the amount or the difficulty before you plug in.</p>${gbtn('▶ GO TO LOBBY', 'data-go="lobby"')}`, action: () => { location.hash = '#/lobby'; } },
-        { label: 'MOVER RULE', body: moverRule },
-      ],
-    });
-  }
-  const unlocked = sessionAge() >= DAY;
-  return gameMenu('session', {
-    title: 'SAVE FILE #0142',
-    status: `TIME <b data-clock>${clockText()}</b>`,
-    items: [
-      { label: 'SEAT 2P', body: () => `
-        ${dots('SIDE', 'NIMORI · 2P')}
-        ${dots('PARTNER', '1P ' + head()[0])}
-        ${dots('YOUR DEPOSIT', fmt(parseFloat(state.amount) || 0) + ' NIMORI')}
-        ${dots('PARTNER DEPOSIT', head()[1])}
-        ${dots('ENTRY ETH', '$' + fmt(SIM.ethUsd) + ' (SIM)')}
-        ${dots('ENTRY NIMORI', '$' + SIM.tokenUsd.toFixed(2) + ' (SIM)')}
-        ${dots('RANGE', DIFF[state.difficulty].label.toUpperCase())}
-        <p class="gm-text small">Your seat is an ERC-721. Sell it and the buyer inherits the session.</p>` },
-      { label: 'FEE SPLIT', body: () => `
-        <div class="gm-bar"><i style="width:50%"></i></div>
-        ${dots('YOU (2P)', '50%')}${dots('PARTNER (1P)', '50%')}
-        <p class="gm-text small">10% of trading fees go to Arcade stakers first. The scarce side can earn a seat bonus, up to 70/30.</p>` },
-      unlocked
-        ? { label: 'UNPLUG', body: () => `<p class="gm-text">24 h played. Unplugging is free. The mover rule settles both seats.</p>${gbtn('▶ UNPLUG', 'data-unplug', 'go')}`, action: () => openExit(false) }
-        : { label: 'RAGE QUIT', body: () => `<p class="gm-text">Unplug unlocks at 24:00:00. Leaving now costs 1% of your seat, paid to your partner.</p>${gbtn('▶ RAGE QUIT (−1%)', 'data-ragequit', 'warn')}<p class="gm-text small"><button class="gm-link" type="button" data-skip>DEMO: SKIP TO 24 H</button></p>`, action: () => openExit(true) },
-      { label: 'SELL SEAT', body: () => `<p class="gm-text">List your save file on any NFT marketplace. The buyer takes your seat, your share of fees and your side of the mover rule.</p>${gbtn('▶ SELL SEAT', 'data-sell')}` },
-      { label: 'MOVER RULE', body: moverRule },
-    ],
-  });
-}
 function moverRule() {
   return `
     <ol class="gm-list">
@@ -474,14 +460,14 @@ W.onChange(() => {
   if (routeName() !== 'draw') render();
 });
 
-const ROUTES = { lobby, session, arcade, docs, draw };
+const ROUTES = { lobby, arcade, docs, draw };
 
 // ---------- console screen content (drawn inside the 3D scene, never an HTML overlay) ----------
 function screenFor(route) {
   if (route === 'draw') return DRAW.entry && DRAW.rolled
     ? { title: 'PRE-LAUNCH DRAW', big: DRAW.entry.ticket.code, lines: ['YOUR TICKET', '1 WALLET · 1 TICKET'] }
     : { title: 'PRE-LAUNCH DRAW', big: 'PLUG IN', lines: ['GET A TICKET', `${DRAW.players ?? '—'} PLAYERS PLUGGED IN`] };
-  if (route === 'session') return { title: 'SAVE FILE #0142', big: clockText(), lines: ['TIME PLAYED', `FEE SPLIT 50/50 · ${DIFF[state.difficulty].label.toUpperCase()}`] };
+  if (route === 'lobby') return { title: 'SAVE FILE #0142', big: clockText(), lines: ['TIME PLAYED', `FEE SPLIT 50/50 · ${DIFF[state.difficulty].label.toUpperCase()}`] };
   if (route === 'arcade') return { title: 'ARCADE', big: STAKE.staked ? fmt(STAKE.staked) : 'INSERT COIN', lines: [STAKE.staked ? 'NIMORI STAKED' : 'STAKE $NIMORI', `PRIORITY PASS ${STAKE.staked ? 'ON' : 'OFF'}`] };
   return { title: 'HOW TO PLAY', big: '1P + 2P', lines: ['ETH + TOKEN = ONE POSITION', 'THE MOVER CARRIES THE IL'] };
 }
@@ -495,21 +481,23 @@ const crtBody = $('[data-crt-body]', crtEl);
 let clockTimer = 0;
 let wasDesktop = window.innerWidth >= 1000;
 const routeName = () => {
-  const name = (location.hash.replace(/^#\/?/, '').split('/')[0]) || 'lobby';
+  let name = (location.hash.replace(/^#\/?/, '').split('/')[0]) || 'lobby';
+  if (name === 'session') name = 'lobby'; // the session now lives in the lobby
   return ROUTES[name] ? name : 'lobby';
 };
-const lidOpenFor = (route) => route === 'draw' || route === 'arcade' || route === 'docs' || (route === 'session' && state.plugged);
+// the lobby opens the console too once player 2 is in: the screen then shows the live session clock
+const lidOpenFor = (route) => route === 'draw' || route === 'arcade' || route === 'docs' || (route === 'lobby' && state.plugged);
 
 let wasOpen = false;
 function render() {
   const route = routeName();
   const desktop = window.innerWidth >= 1000;
   const open = !!scene && lidOpenFor(route);
-  const onScreen = open && desktop;
+  const onScreen = open && desktop && route !== 'lobby';
   document.body.dataset.mode = onScreen ? 'screen' : 'panel';
   if (open !== wasOpen) { sfx(open ? 'lid' : 'close'); wasOpen = open; }
   scene?.setLid(open);
-  scene?.setView(open ? 'screen' : route);
+  scene?.setView(route === 'lobby' ? (open ? 'lobbyOpen' : 'lobby') : open ? 'screen' : route);
   scene?.setDifficulty(state.difficulty);
   scene?.setOverlay(onScreen);
   if (open) scene?.setScreen(onScreen ? {} : screenFor(route));
@@ -532,7 +520,7 @@ function render() {
   if (state.plugged) {
     clockTimer = setInterval(() => {
       $$('[data-clock]').forEach((el) => { el.textContent = clockText(); });
-      if (route === 'session' && !onScreen && open) scene?.setScreen(screenFor(route));
+      if (open && !onScreen) scene?.setScreen(screenFor(route));
     }, 1000);
   }
 }
@@ -714,7 +702,7 @@ function plugIn() {
     setTimeout(() => {
       m.classList.remove('show');
       // the second cable is in: the lid opens on the save file
-      if (routeName() === 'session') render(); else location.hash = '#/session';
+      if (routeName() === 'lobby') render(); else location.hash = '#/lobby';
     }, 1300);
   }, scene ? 1500 : 200);
 }

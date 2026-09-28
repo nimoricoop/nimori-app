@@ -615,6 +615,8 @@ export function createScene(mount, overlayEl = null, { onBootStart = null, onBoo
   const VIEWS = {
     lobby: [new THREE.Vector3(2.4, 2.9, 10.2), new THREE.Vector3(0.1, 0.28, 0.8)],
     session: [new THREE.Vector3(-1.6, 7.6, 7.4), new THREE.Vector3(0.0, 0.5, 0.3)],
+    // lobby after the match: lid open, a bit higher so the screen and both cables are in frame
+    lobbyOpen: [new THREE.Vector3(1.6, 4.4, 10.4), new THREE.Vector3(-0.15, 1.05, -0.2)],
     // lid open, straight at the screen (screen centre is about (0, 2.0, -1.32), normal (0, .26, .97))
     screen: [new THREE.Vector3(0.0, 3.62, 4.75), new THREE.Vector3(0.0, 1.9, -1.32)],
     docs: [new THREE.Vector3(-7.2, 4.6, 9.0), new THREE.Vector3(-0.2, 0.4, 0.6)],

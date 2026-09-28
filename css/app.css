@@ -580,3 +580,38 @@ body[data-mode="screen"] .panel { display: none; }
   .gm-item { font-size: 10px; padding: 10px 6px 10px 22px; }
   .gm-foot span:not(:last-child) { display: none; }
 }
+
+/* ============ retro arcade popups + toast ============ */
+.modal { background: rgba(10,0,0,.6); backdrop-filter: blur(3px); }
+.modal-card {
+  width: min(480px, 100%); padding: 18px 20px 16px; border-radius: 8px; color: var(--gm-ink); font-family: var(--crt);
+  background: linear-gradient(180deg, var(--gm-win), var(--gm-win2));
+  border: 3px solid var(--gm-ink); box-shadow: inset 0 0 0 2px #000, inset 0 0 0 4px rgba(254,243,213,.25), 0 6px 0 #000, 0 30px 60px rgba(0,0,0,.5);
+  animation: md-pop .16s steps(3, end);
+  position: relative;
+}
+.modal-card::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: 6px; background: repeating-linear-gradient(0deg, rgba(0,0,0,.14) 0 2px, transparent 2px 4px); }
+.md-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.md-ico { width: 36px; height: 36px; display: grid; place-items: center; background: #000; border: 2px solid var(--amber); color: var(--amber); flex: none; }
+.md-ico svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: square; stroke-linejoin: miter; }
+.modal-card h2 { margin: 0; font-family: var(--px); font-weight: 400; font-size: 15px; line-height: 1.3; letter-spacing: .04em; color: var(--amber); text-shadow: 2px 2px 0 #000; }
+.modal-card .explain { margin: 0 0 12px; font-size: 22px; line-height: 1.05; color: var(--gm-ink); }
+.modal-card .summary { border: 2px solid rgba(254,243,213,.35); border-radius: 0; padding: 8px 12px; background: rgba(0,0,0,.35); }
+.modal-card .summary .gm-kv { font-size: 21px; }
+.md-note { margin: 12px 0 0; padding: 8px 10px; font-size: 20px; line-height: 1.05; color: #ffd9a0; border: 2px dashed rgba(243,174,21,.6); }
+.modal-card .row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+.modal-card .row2.single { grid-template-columns: minmax(0, 1fr); }
+.modal-card .row2 .gb { width: 100%; margin: 0; padding: 13px 8px; }
+.modal-card .demo-note { margin: 12px 0 0; text-align: center; font-family: var(--px); font-size: 8px; letter-spacing: .06em; color: var(--gm-dim); }
+.modal-card .wallets { display: grid; gap: 8px; }
+.modal-card .wallets button, .modal-card .wallets .wallet-opt {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 0; cursor: pointer;
+  background: #000; border: 2px solid rgba(254,243,213,.5); color: var(--gm-ink); font-family: var(--px); font-size: 11px;
+}
+.modal-card .wallets .wallet-opt:hover, .modal-card .wallets .wallet-opt:focus-visible { border-color: var(--amber); color: var(--amber); outline: none; }
+.modal-card .wallets .wallet-opt::before { content: "▶"; color: var(--amber); visibility: hidden; }
+.modal-card .wallets .wallet-opt:hover::before, .modal-card .wallets .wallet-opt:focus-visible::before { visibility: visible; }
+.modal-card .wallets small { margin-left: auto; font-size: 8px; color: #9dff6a; }
+.modal-card .wallets img { width: 24px; height: 24px; image-rendering: pixelated; }
+@keyframes md-pop { from { transform: scale(.92); opacity: 0; } }
+.toast { border-radius: 0; background: #000; color: var(--gm-ink); font-family: var(--px); font-size: 10px; line-height: 1.6; letter-spacing: .03em; border: 2px solid var(--gm-ink); box-shadow: 0 0 0 2px #000, 0 6px 0 #000; }
