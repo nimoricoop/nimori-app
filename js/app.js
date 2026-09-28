@@ -1,6 +1,6 @@
-// NIMORI demo — app shell + hash router.
+// NIMORI — app shell + hash router.
 // The router rewrites the side panel (Lobby) or the page laid over the console screen. The 3D console (#stage) is mounted once.
-// Nothing here is on-chain: queues, prices, the match and staking are simulated in this file.
+// Pre-launch: no contract is live, so nothing here shows a number that is not real. The draw is the only live feature.
 import { createScene } from './scene.js';
 import { sfx, playedJustNow, isMuted, setMuted } from './sound.js';
 import * as W from './wallet.js';
@@ -9,8 +9,6 @@ import { figMatch, figDifficulty, figTimeline, figPayouts, figHotSwap, figFees }
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const fmt = (n, d = 0) => Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
-const usd = (n) => '$' + fmt(n, 2);
-const pct = (n) => (n >= 0 ? '+' : '') + (n * 100).toFixed(1) + '%';
 
 // ---------- icons (inline, stroke = currentColor) ----------
 const I = {
@@ -32,32 +30,15 @@ const I = {
   exit: '<svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l-5-5 5-5M5 12h11"/></svg>',
 };
 
-// ---------- simulated state ----------
-const state = { difficulty: 'normal', amount: '16000', plugged: false, matchedAt: 0 };
-const SIM = {
-  tokenUsd: 0.1,
-  ethUsd: 2000,
-  queues: {
-    easy: { p1: [['0x3f1…a91c', '1.20 ETH', '41m'], ['0x9b0…07e2', '0.50 ETH', '12m']], p2: [] },
-    normal: { p1: [['0x5d7…c3b8', '0.80 ETH', '18m'], ['0xa04…11f9', '0.35 ETH', '6m']], p2: [] },
-    hard: { p1: [['0x71e…9d02', '0.40 ETH', '2h 04m']], p2: [] },
-  },
-};
+// ---------- state (pre-launch: no simulated queues, prices or balances) ----------
+// `plugged` = this browser's wallet is entered in the draw: the second cable goes in for real.
+const state = { difficulty: 'normal', plugged: false };
 const DIFF = {
   easy: { label: 'Easy', range: [1, 1, 1, 1, 1], note: 'Full range. Lower fees, lowest IL.' },
   normal: { label: 'Normal', range: [0, 1, 1, 1, 0], note: 'Wide range around spot. Medium fees, medium IL.' },
   hard: { label: 'Hard', range: [0, 0, 1, 0, 0], note: 'Narrow range. Highest fees, can go out of range.' },
 };
-const STAKE = { wallet: 50000, staked: 0, mode: 'stake' };
-const DAY = 24 * 3600 * 1000;
 const rangeViz = (d) => `<span class="rangeviz" aria-hidden="true">${DIFF[d].range.map((o) => `<i class="${o ? 'on' : ''}"></i>`).join('')}</span>`;
-const head = () => SIM.queues[state.difficulty].p1[0];
-const sessionAge = () => Date.now() - state.matchedAt;
-const clockText = () => {
-  const s = Math.max(0, Math.floor(sessionAge() / 1000));
-  return [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map((n) => String(n).padStart(2, '0')).join(':');
-};
-
 // ---------- scene (created once) ----------
 let scene = null;
 const crtEl = document.createElement('div');
@@ -81,7 +62,7 @@ function toast(msg, kind = '') {
   toast._t = setTimeout(() => t.classList.remove('show'), 2800);
 }
 let lastFocus = null;
-function openModal({ icon = I.info, tone = '', title, explain = '', rows = [], note = '', body = '', cancel = 'Cancel', confirm = null, onConfirm = null, demo = true }) {
+function openModal({ icon = I.info, tone = '', title, explain = '', rows = [], note = '', body = '', cancel = 'Cancel', confirm = null, onConfirm = null }) {
   lastFocus = document.activeElement;
   // retro arcade dialog: RPG window, pixel title, dotted rows, pixel buttons
   $('#modalCard').innerHTML = `
@@ -94,7 +75,7 @@ function openModal({ icon = I.info, tone = '', title, explain = '', rows = [], n
       <button class="gb" type="button" data-close>${String(cancel).toUpperCase()}</button>
       ${confirm ? `<button class="gb go" type="button" data-confirm>▶ ${String(confirm).toUpperCase()}</button>` : ''}
     </div>
-    ${demo ? '<p class="demo-note">DEMO · SIMULATED. NOTHING IS SIGNED OR SENT.</p>' : ''}`;
+`;
   $('#modal').hidden = false;
   sfx('open');
   $('[data-close]', $('#modalCard')).addEventListener('click', closeModal);
@@ -110,110 +91,46 @@ function closeModal() {
 $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') { sfx('back'); closeModal(); } });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#modal').hidden) { sfx('back'); closeModal(); } });
 
-// Seat value at simulated prices: full-range x*y=k and the mover rule (docs 3.6).
-function seatQuote() {
-  const eth = parseFloat(head()[1]);
-  const tokens = parseFloat(state.amount) || 0;
-  const mins = sessionAge() / 60000;
-  const dEth = 0.012, dTok = 0.048 + Math.min(mins, 600) * 0.0001;
-  const e1 = SIM.ethUsd * (1 + dEth), t1 = SIM.tokenUsd * (1 + dTok);
-  const k = eth * tokens;
-  const ratio = t1 / e1;
-  const value = Math.sqrt(k * ratio) * e1 + Math.sqrt(k / ratio) * t1;
-  const hold1 = eth * e1, hold2 = tokens * t1;
-  const tokenMover = Math.abs(dTok) >= Math.abs(dEth);
-  const covered = value >= (tokenMover ? hold1 : hold2);
-  const p1 = tokenMover ? Math.min(hold1, value) : value - Math.min(hold2, value);
-  return { dEth, dTok, value, p1, p2: value - p1, tokenMover, covered };
-}
-
 // ---------- pages ----------
 function lobby() {
-  const q = SIM.queues[state.difficulty];
-  const head = q.p1[0];
-  const usd = (parseFloat(state.amount) || 0) * SIM.tokenUsd;
-  const p1rows = q.p1.map((r) => `<li><span class="addr">${r[0]}</span><span>${r[1]}</span></li>`).join('');
-  const p2rows = state.plugged
-    ? `<li class="you"><span class="addr">you</span><span>${fmt(state.amount)}</span></li>`
-    : `<li class="empty"><span>empty seat</span><span>—</span></li>`;
+  const e = DRAW.entry;
   return `
-    <a class="draw-banner" href="#/draw"><span>PRE-LAUNCH</span><b>Plug in your wallet, get a ticket for the $NIMORI draw</b><i>→</i></a>
+    <a class="draw-banner" href="#/draw"><span>PRE-LAUNCH</span><b>${e ? 'You are plugged in. Ticket ' + e.ticket.code : 'Plug in your wallet, get a ticket for the $NIMORI draw'}</b><i>→</i></a>
     <p class="eyebrow">Lobby · NIMORI / ETH</p>
-    <h1>${state.plugged ? 'Player 2 connected.' : 'Player 1 is waiting.'}</h1>
-    <p class="lede">You bring the token. Player 1 already brought the ETH. One Uniswap v4 position, two seats.</p>
+    <h1>${e ? 'Player 2 connected.' : 'Waiting for player 2.'}</h1>
+    <p class="lede">Player 1 brings ETH, player 2 brings the token. NIMORI matches them into one position with two seats. Lobbies open at launch.</p>
 
     <div class="pairbar">
       <span class="pair"><span class="coin eth">Ξ</span><span class="coin">N</span>NIMORI / ETH</span>
-      <span class="muted">More lobbies open by Arcade vote.</span>
+      <span class="muted">First lobby. More open by Arcade vote.</span>
     </div>
 
     <h2>Difficulty</h2>
     <div class="seg" role="group" aria-label="Difficulty">
-      ${Object.entries(DIFF).map(([k, v]) => `<button type="button" data-diff="${k}" aria-pressed="${k === state.difficulty}" ${state.plugged ? 'disabled' : ''}>${v.label}</button>`).join('')}
+      ${Object.entries(DIFF).map(([k, v]) => `<button type="button" data-diff="${k}" aria-pressed="${k === state.difficulty}">${v.label}</button>`).join('')}
     </div>
     <div class="seg-note">${rangeViz(state.difficulty)}<span>${DIFF[state.difficulty].note} Shown on the console's RANGE strip.</span></div>
 
     <div class="queues">
       <div class="queue">
         <div class="queue-h"><b>1P</b><span>ETH queue · ${DIFF[state.difficulty].label}</span></div>
-        <ol>${p1rows}</ol>
+        <ol><li class="empty"><span>opens at launch</span><span>—</span></li></ol>
       </div>
       <div class="queue">
         <div class="queue-h"><b>2P</b><span>NIMORI queue</span></div>
-        <ol>${p2rows}</ol>
+        <ol><li class="empty"><span>opens at launch</span><span>—</span></li></ol>
       </div>
     </div>
-    <p class="muted" style="margin-top:8px">Matched FIFO by value, same difficulty only. Head of the 1P queue: <span class="mono">${head[0]}</span>, ${head[1]}, waiting ${head[2]}.</p>
+    <p class="muted" style="margin-top:8px">At launch: deposits are matched FIFO by value, same difficulty only. Unmatched deposits can be withdrawn anytime, free.</p>
 
-    <div class="status ${state.plugged ? 'ok' : ''}">
+    <div class="status ${e ? 'ok' : ''}">
       <span class="dot"></span>
-      <span>${state.plugged ? 'MATCHED · save file #0142 minted (simulated)' : 'port 2 empty · waiting for player 2 ▮▮▮▯▯'}</span>
+      <span>${e ? 'plugged in · ticket ' + e.ticket.code : 'port 2 empty · waiting for player 2 ▮▮▮▯▯'}</span>
     </div>
-
-    ${state.plugged ? lobbySession() : `
-      <label class="field">
-        <input inputmode="decimal" aria-label="Deposit amount in NIMORI" value="${state.amount}" data-amount>
-        <span class="unit">NIMORI</span>
-      </label>
-      <dl class="kv">
-        <dt>Value at pool price</dt><dd data-usd>≈ $${fmt(usd)}</dd>
-        <dt>Fee split</dt><dd>50 / 50 (2P queue is short)</dd>
-        <dt>Min session</dt><dd>24 h</dd>
-        <dt>While unmatched</dt><dd>withdraw anytime, free</dd>
-      </dl>
-      <button class="btn btn-block" type="button" data-plug>Plug in as 2P</button>
-    `}
+    <button class="btn btn-block" type="button" data-go="draw">${e ? 'See my ticket' : 'Plug in to the draw'}</button>
 
     <p class="risk"><b>Who carries what.</b> The side whose asset moved more carries the IL. If the token moves more, 2P carries it, and 1P gets their ETH back <b>as long as the position covers it</b>. Past roughly −75% on the token, the cap applies and 1P gets less.</p>
-    <p class="muted" style="margin-top:12px">Demo: queues, prices and the match are simulated. No contract is deployed.</p>
   `;
-}
-
-// the session, shown in the lobby once the second cable is in
-function lobbySession() {
-  const unlocked = sessionAge() >= DAY;
-  return `
-    <div class="savefile">
-      <div class="savefile-h"><span class="slot">SAVE FILE #0142</span><span class="badge">SEAT 2P</span></div>
-      <dl class="kv">
-        <dt>Partner</dt><dd>1P · ${head()[0]}</dd>
-        <dt>Your deposit</dt><dd>${fmt(parseFloat(state.amount) || 0)} NIMORI</dd>
-        <dt>Partner deposit</dt><dd>${head()[1]}</dd>
-        <dt>Entry prices</dt><dd>$${fmt(SIM.ethUsd)} · $${SIM.tokenUsd.toFixed(2)} (sim.)</dd>
-      </dl>
-      <div style="display:flex;justify-content:space-between;font-size:12px;color:#c9a98a"><span>fee split · you 50%</span><span>partner 50%</span></div>
-      <div class="split"><i style="width:50%;background:#f3ae15"></i><i style="width:50%;background:#fef3d5"></i></div>
-      <div style="display:flex;justify-content:space-between;align-items:end;gap:10px;margin-top:12px">
-        <div><div style="color:#c9a98a;font-size:12px">time played</div><div class="clock" data-clock>${clockText()}</div></div>
-        <div style="text-align:right;color:#c9a98a;font-size:12px">${unlocked ? 'unplug is free now' : 'unplug unlocks<br>at 24:00:00'}</div>
-      </div>
-    </div>
-    <div class="actions">
-      ${unlocked ? '<button class="btn" type="button" data-unplug>Unplug</button>' : '<button class="btn" type="button" data-ragequit>Rage quit (−1%)</button>'}
-      <button class="btn btn-cream" type="button" data-sell>Sell seat</button>
-    </div>
-    ${unlocked ? '' : '<p style="margin:10px 0 0;text-align:center"><button class="linkbtn" type="button" data-skip>demo: skip to 24 h</button></p>'}
-    <button class="btn btn-cream btn-block" type="button" data-reset style="margin-top:10px">Reset demo</button>`;
 }
 
 // ---------- retro game menu (used by every page drawn on the console screen) ----------
@@ -243,7 +160,7 @@ function gameMenu(route, { title, status = '', items }) {
           ${it.body()}
         </div>
       </div>
-      <div class="gm-foot"><span>▲▼ MOVE</span><span>ENTER SELECT</span><span>${state.plugged ? 'P2 ●' : 'P2 ○'}</span></div>
+      <div class="gm-foot"><span>▲▼ MOVE</span><span>ENTER SELECT</span><span>${DRAW.entry ? 'P2 ●' : 'P2 ○'}</span></div>
     </div>`;
 }
 
@@ -258,31 +175,23 @@ function moverRule() {
 }
 
 function arcade() {
-  const stakeBody = (mode) => () => { STAKE.mode = mode; return `
-    <label class="gm-field">
-      <input inputmode="decimal" placeholder="0" aria-label="Amount of NIMORI" data-samt>
-      <span>NIMORI</span><button type="button" class="gm-max" data-smax>MAX</button>
-    </label>
-    ${dots('DEMO WALLET', fmt(STAKE.wallet))}${dots('STAKED', fmt(STAKE.staked))}${dots('PRIORITY PASS', STAKE.staked ? '<span class="on">ON</span>' : 'OFF')}
-    ${gbtn(mode === 'stake' ? '▶ INSERT COIN' : '◀ CASH OUT', 'data-sgo', 'go')}
-    <p class="gm-text small">No APR shown: there is no live volume yet, so any number would be made up.</p>`; };
   return gameMenu('arcade', {
     title: 'ARCADE',
-    status: `STAKED <b>${fmt(STAKE.staked)}</b>`,
+    status: 'OPENS AT LAUNCH',
     items: [
-      { label: 'STAKE', body: stakeBody('stake') },
-      { label: 'UNSTAKE', disabled: !STAKE.staked, body: stakeBody('unstake') },
+      { label: 'STAKE', body: () => `
+        <p class="gm-text">Staking $NIMORI opens once the token is live on Pons, the Robinhood Chain launchpad.</p>
+        ${dots('FEE SHARE', '10% OF CO-OP FEES')}${dots('PRIORITY PASS', 'STAKERS FIRST')}${dots('PAIR VOTE', 'ON')}
+        <p class="gm-text small">No APR is shown: there is no volume yet, so any number would be made up.</p>
+        ${gbtn('▶ ENTER THE DRAW', 'data-go="draw"', 'go')}` },
       { label: 'PERKS', body: () => `
         <ol class="gm-list">
           <li><b>FEE SHARE.</b> 10% of co-op trading fees, paid in ETH and pair tokens.</li>
           <li><b>PRIORITY PASS.</b> Stakers get matched first in lobby queues.</li>
           <li><b>PAIR VOTE.</b> Stakers choose which pairs open a lobby.</li>
-        </ol>
-        <p class="gm-text small">$NIMORI launched on Pons, the Robinhood Chain launchpad.</p>` },
-      { label: 'PAIR VOTE', body: () => `
-        ${[['WETH / PAIR A', 46], ['WETH / PAIR B', 31], ['WETH / PAIR C', 23]].map(([n, v]) => `<div class="gm-vote"><span>${n}</span><b>${v}%</b><div class="gm-bar"><i style="width:${v}%"></i></div></div>`).join('')}
-        <p class="gm-text small">Candidate pairs, simulated tallies.</p>` },
-      { label: 'RISK', body: () => `<p class="gm-text">Staked NIMORI is exposed to the token price and to smart contract risk. No audit is claimed here.</p>` },
+        </ol>` },
+      { label: 'PAIR VOTE', body: () => `<p class="gm-text">The first lobby is NIMORI / ETH. Stakers vote on the next pairs after launch.</p>` },
+      { label: 'RISK', body: () => `<p class="gm-text">Staked NIMORI will be exposed to the token price and to smart contract risk. No audit is claimed here.</p>` },
     ],
   });
 }
@@ -330,6 +239,21 @@ async function drawApi(path = '', init) {
   if (!r.ok) throw new Error(j.error || 'Server error');
   return j;
 }
+// the second cable goes in for real once this wallet has a stored entry
+function syncCable(withFanfare = false) {
+  const on = !!DRAW.entry;
+  if (on === state.plugged) return;
+  state.plugged = on;
+  if (on) {
+    scene?.plug2P();
+    if (withFanfare) {
+      setTimeout(() => sfx('plug'), 250);
+      setTimeout(() => { const m = $('#matched'); m.classList.add('show'); setTimeout(() => m.classList.remove('show'), 1800); }, scene ? 1500 : 100);
+    }
+  } else scene?.unplug2P();
+  setHud();
+}
+
 async function refreshDraw() {
   try {
     const a = W.account()?.address;
@@ -337,6 +261,7 @@ async function refreshDraw() {
     DRAW.players = j.players;
     DRAW.entry = j.entry || null;
     if (DRAW.entry) { DRAW.rolled = true; MENU_SEL.draw = 2; }
+    syncCable(false);
   } catch { DRAW.players = null; }
   if (routeName() === 'draw') render();
 }
@@ -391,6 +316,7 @@ async function doSign() {
     DRAW.players = j.players;
     DRAW.rolled = !!j.already;
     MENU_SEL.draw = 2;
+    syncCable(true);
     sfx('coin');
   } catch (err) {
     DRAW.error = /reject|denied|4001/i.test(String(err?.message || err)) ? 'Signature cancelled in the wallet.' : String(err?.message || err);
@@ -442,7 +368,6 @@ function openWalletPicker() {
     explain: list.length ? 'Pick a wallet. Connecting only reads your address; nothing is signed yet.' : 'No wallet found in this browser. Install one (Rabby, MetaMask, Coinbase Wallet) or open this page in your wallet app.',
     body: list.length ? `<div class="wallets">${list.map((w, i) => `<button type="button" class="wallet-opt" data-wpick="${i}">${w.icon ? `<img src="${w.icon}" alt="">` : ''}<span>${w.name}</span><small>Detected</small></button>`).join('')}</div>` : '',
     cancel: 'Close',
-    demo: false,
   });
   $$('[data-wpick]', $('#modalCard')).forEach((b) => b.addEventListener('click', async () => {
     const w = list[+b.dataset.wpick];
@@ -455,6 +380,7 @@ W.onChange(() => {
   const btn = $('[data-connect]');
   btn.textContent = a ? W.short(a.address) : 'Connect wallet';
   DRAW.entry = null; DRAW.rolled = false; DRAW.error = '';
+  syncCable(false);
   MENU_SEL.draw = a ? 1 : 0;
   refreshDraw();
   if (routeName() !== 'draw') render();
@@ -467,8 +393,7 @@ function screenFor(route) {
   if (route === 'draw') return DRAW.entry && DRAW.rolled
     ? { title: 'PRE-LAUNCH DRAW', big: DRAW.entry.ticket.code, lines: ['YOUR TICKET', '1 WALLET · 1 TICKET'] }
     : { title: 'PRE-LAUNCH DRAW', big: 'PLUG IN', lines: ['GET A TICKET', `${DRAW.players ?? '—'} PLAYERS PLUGGED IN`] };
-  if (route === 'lobby') return { title: 'SAVE FILE #0142', big: clockText(), lines: ['TIME PLAYED', `FEE SPLIT 50/50 · ${DIFF[state.difficulty].label.toUpperCase()}`] };
-  if (route === 'arcade') return { title: 'ARCADE', big: STAKE.staked ? fmt(STAKE.staked) : 'INSERT COIN', lines: [STAKE.staked ? 'NIMORI STAKED' : 'STAKE $NIMORI', `PRIORITY PASS ${STAKE.staked ? 'ON' : 'OFF'}`] };
+  if (route === 'arcade') return { title: 'ARCADE', big: 'SOON', lines: ['STAKING OPENS AT LAUNCH', 'LAUNCHING ON PONS'] };
   return { title: 'HOW TO PLAY', big: '1P + 2P', lines: ['ETH + TOKEN = ONE POSITION', 'THE MOVER CARRIES THE IL'] };
 }
 
@@ -486,7 +411,7 @@ const routeName = () => {
   return ROUTES[name] ? name : 'lobby';
 };
 // the lobby opens the console too once player 2 is in: the screen then shows the live session clock
-const lidOpenFor = (route) => route === 'draw' || route === 'arcade' || route === 'docs' || (route === 'lobby' && state.plugged);
+const lidOpenFor = (route) => route === 'draw' || route === 'arcade' || route === 'docs';
 
 let wasOpen = false;
 function render() {
@@ -516,13 +441,6 @@ function render() {
   document.title = `NIMORI · ${route[0].toUpperCase() + route.slice(1)}`;
   setHud();
   bind(root);
-  clearInterval(clockTimer);
-  if (state.plugged) {
-    clockTimer = setInterval(() => {
-      $$('[data-clock]').forEach((el) => { el.textContent = clockText(); });
-      if (open && !onScreen) scene?.setScreen(screenFor(route));
-    }, 1000);
-  }
 }
 window.addEventListener('resize', () => {
   const d = window.innerWidth >= 1000;
@@ -531,29 +449,17 @@ window.addEventListener('resize', () => {
 
 function setHud() {
   $('#hud').classList.toggle('ok', state.plugged);
-  $('#hud-label').textContent = state.plugged ? 'player 2 connected · session live' : 'waiting for player 2';
+  $('#hud-label').textContent = state.plugged ? 'player 2 connected · plugged in' : 'waiting for player 2';
   $('#hud-bar').textContent = state.plugged ? '▮▮▮▮▮' : '▮▮▮▯▯';
 }
 
 function bind(root) {
   $$('[data-diff]', root).forEach((b) => b.addEventListener('click', () => { state.difficulty = b.dataset.diff; render(); }));
-  const amt = $('[data-amount]', root);
-  if (amt) amt.addEventListener('input', () => {
-    state.amount = amt.value.replace(/[^\d.]/g, '');
-    $('[data-usd]', root).textContent = `≈ $${fmt((parseFloat(state.amount) || 0) * SIM.tokenUsd)}`;
-  });
-  $$('[data-plug]', root).forEach((b) => b.addEventListener('click', confirmPlug));
-  $('[data-reset]', root)?.addEventListener('click', () => { state.plugged = false; scene?.unplug2P(); render(); });
   $$('[data-go]', root).forEach((b) => b.addEventListener('click', () => { location.hash = `#/${b.dataset.go}`; }));
-  $('[data-ragequit]', root)?.addEventListener('click', () => openExit(true));
-  $('[data-unplug]', root)?.addEventListener('click', () => openExit(false));
-  $('[data-sell]', root)?.addEventListener('click', () => toast('Seats are ERC-721: list yours on any marketplace. Not live in this demo.'));
-  $('[data-skip]', root)?.addEventListener('click', () => { state.matchedAt -= DAY; render(); toast('Demo clock moved forward 24 h.'); });
   $$('[data-anchor]', root).forEach((a) => a.addEventListener('click', (e) => {
     e.preventDefault();
     $(`#${a.dataset.anchor}`, root)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }));
-  bindStake(root);
   $$('[data-mi]', root).forEach((b) => b.addEventListener('click', () => menuPick(+b.dataset.mi, true)));
   $('[data-wconnect]', root)?.addEventListener('click', openWalletPicker);
   $('[data-wdisconnect]', root)?.addEventListener('click', () => { W.disconnect(); });
@@ -598,115 +504,6 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-function bindStake(root) {
-  const amt = $('[data-samt]', root);
-  if (!amt) return;
-  $$('[data-smode]', root).forEach((b) => b.addEventListener('click', () => { STAKE.mode = b.dataset.smode; render(); }));
-  $('[data-smax]', root).addEventListener('click', () => { amt.value = String(STAKE.mode === 'stake' ? STAKE.wallet : STAKE.staked); });
-  $('[data-sgo]', root).addEventListener('click', () => {
-    const n = parseFloat((amt.value || '').replace(/[^\d.]/g, ''));
-    const staking = STAKE.mode === 'stake';
-    const cap = staking ? STAKE.wallet : STAKE.staked;
-    if (!(n > 0)) { toast('Enter an amount first.', 'error'); amt.focus(); return; }
-    if (n > cap) { toast(staking ? 'Not enough NIMORI in the demo wallet. Try MAX.' : 'You have less than that staked.', 'error'); return; }
-    openModal({
-      icon: staking ? I.coin : I.exit,
-      tone: 'amber',
-      title: staking ? 'Stake NIMORI?' : 'Unstake NIMORI?',
-      explain: staking ? 'Staking puts you in the Arcade.' : 'Unstaking takes you out of the priority queue.',
-      rows: staking ? [
-        ['You stake', `${fmt(n)} NIMORI`],
-        ['Fee share', '10% of co-op fees, pro rata'],
-        ['Priority pass', 'On'],
-        ['Pair vote', 'On'],
-      ] : [
-        ['You unstake', `${fmt(n)} NIMORI`],
-        ['Left staked', `${fmt(STAKE.staked - n)} NIMORI`],
-        ['Priority pass', STAKE.staked - n > 0 ? 'Still on' : 'Off'],
-      ],
-      note: staking ? 'Staked NIMORI stays exposed to the token price and to smart contract risk.' : '',
-      cancel: 'Back',
-      confirm: staking ? 'Stake' : 'Unstake',
-      onConfirm: () => {
-        if (staking) { STAKE.wallet -= n; STAKE.staked += n; } else { STAKE.wallet += n; STAKE.staked -= n; }
-        render();
-        toast(staking ? `Staked ${fmt(n)} NIMORI (simulated). Priority pass on.` : `Unstaked ${fmt(n)} NIMORI (simulated).`);
-      },
-    });
-  });
-}
-
-function confirmPlug() {
-  if (!(parseFloat(state.amount) > 0)) { toast('Enter an amount first.', 'error'); return; }
-  const tokens = parseFloat(state.amount);
-  openModal({
-    icon: I.plug,
-    title: 'Plug in as 2P?',
-    explain: `You join the NIMORI queue on ${DIFF[state.difficulty].label}. Player 1 is already waiting, so this matches right away.`,
-    rows: [
-      ['You deposit', `${fmt(tokens)} NIMORI`],
-      ['Value at pool price', `≈ $${fmt(tokens * SIM.tokenUsd)}`],
-      ['Matched with', `${head()[0]} · ${head()[1]}`],
-      ['Range', DIFF[state.difficulty].label],
-      ['Fee split', '50 / 50'],
-      ['Minimum session', '24 h'],
-    ],
-    note: 'If NIMORI moves more than ETH, you carry the IL. 1P gets their ETH back as long as the position covers it.',
-    cancel: 'Not yet',
-    confirm: 'Plug in',
-    onConfirm: plugIn,
-  });
-}
-
-function openExit(early) {
-  const q = seatQuote();
-  const pen = early ? q.p2 * 0.01 : 0;
-  openModal({
-    icon: I.exit,
-    title: early ? 'Rage quit?' : 'Unplug?',
-    explain: `At current simulated prices: ETH ${pct(q.dEth)}, NIMORI ${pct(q.dTok)} since entry.`,
-    rows: [
-      ['Mover', q.tokenMover ? 'NIMORI (you, 2P)' : 'ETH (1P)'],
-      ['Position value', usd(q.value)],
-      ['Your seat value', usd(q.p2)],
-      ...(early ? [['Penalty (1%, to 1P)', '−' + usd(pen)]] : []),
-      ['You receive', usd(q.p2 - pen)],
-      ['After you leave', 'Position unwinds, both paid'],
-    ],
-    note: q.covered ? '' : 'The position does not cover the non-mover\'s deposit at these prices: the cap applies.',
-    cancel: 'Keep playing',
-    confirm: early ? 'Rage quit' : 'Unplug',
-    onConfirm: () => {
-      sfx(early ? 'ragequit' : 'unplug');
-      state.plugged = false;
-      scene?.unplug2P();
-      location.hash = '#/lobby';
-      render();
-      toast(early ? `Rage quit. ${usd(pen)} paid to 1P (simulated).` : 'Unplugged. Position unwound, both seats paid (simulated).');
-    },
-  });
-}
-
-function plugIn() {
-  if (state.plugged) return;
-  state.plugged = true;
-  state.matchedAt = Date.now();
-  scene?.plug2P();
-  setTimeout(() => sfx('plug'), 250);
-  $$('[data-plug]').forEach((b) => { b.disabled = true; b.textContent = 'Plugging in…'; });
-  setTimeout(() => {
-    const m = $('#matched');
-    m.classList.add('show');
-    sfx('matched');
-    setHud();
-    setTimeout(() => {
-      m.classList.remove('show');
-      // the second cable is in: the lid opens on the save file
-      if (routeName() === 'lobby') render(); else location.hash = '#/lobby';
-    }, 1300);
-  }, scene ? 1500 : 200);
-}
-
 $('[data-connect]').addEventListener('click', () => (W.account() ? (location.hash = '#/draw') : openWalletPicker()));
 window.addEventListener('hashchange', render);
 if (!location.hash) history.replaceState(null, '', '#/lobby');
@@ -720,7 +517,7 @@ document.addEventListener('click', (e) => {
   if (!el || el.disabled || playedJustNow()) return;
   if (el.matches('[data-confirm]')) sfx('coin');
   else if (el.matches('[data-close]')) sfx('back');
-  else if (el.matches('[data-diff], [data-smode], [data-smax], .toc a, [data-anchor]')) sfx('select');
+  else if (el.matches('[data-diff], .toc a, [data-anchor]')) sfx('select');
   else sfx('blip');
 });
 const muteBtn = $('[data-mute]');
@@ -734,3 +531,30 @@ const paintMute = () => {
 muteBtn.addEventListener('click', () => { setMuted(!isMuted()); paintMute(); if (!isMuted()) sfx('coin'); });
 paintMute();
 refreshDraw();
+
+// ---------- boot screen ----------
+// The bar follows real work: fonts, the logo image, then two rendered frames of the 3D console.
+(function boot() {
+  const el = $('#boot'); if (!el) return;
+  const fill = $('#bootFill'), txt = $('#bootTxt');
+  const t0 = performance.now();
+  let shown = 0;
+  const set = (v) => { shown = Math.max(shown, v); fill.style.width = Math.round(shown * 100) + '%'; };
+  set(0.12);
+  const logo = new Promise((r) => { const i = new Image(); i.onload = i.onerror = r; i.src = 'img/wordmark.webp'; });
+  const frames = new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const steps = [document.fonts ? document.fonts.ready : Promise.resolve(), logo, frames];
+  let done = 0;
+  steps.forEach((s) => s.then(() => set(0.12 + (++done / steps.length) * 0.78)));
+  const timeout = new Promise((r) => setTimeout(r, 5000));
+  Promise.race([Promise.all(steps), timeout]).then(() => {
+    const wait = Math.max(0, 1400 - (Date.now() - (window.__bootT0 || Date.now()))); // from first paint of the boot screen: long enough to read the logo
+    setTimeout(() => {
+      set(1);
+      txt.textContent = 'PRESS START';
+      txt.classList.add('start');
+      sfx('boot');
+      setTimeout(() => el.classList.add('gone'), 650);
+    }, wait);
+  });
+})();

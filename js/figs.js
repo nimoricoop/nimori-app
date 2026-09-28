@@ -29,7 +29,7 @@ export function figMatch() {
     ${arrow(456, 100, 518, 55)}${arrow(456, 114, 518, 159)}
     ${box(522, 18, 190, 74)}${chip(554, 55, '1P', C.red50, C.red)}${T(580, 50, 'Seat 1P')}${T(580, 70, 'ERC-721 · save file', { size: 12, w: 500, fill: C.ink3 })}
     ${box(522, 122, 190, 74)}${chip(554, 159, '2P', C.amber50, C.amber)}${T(580, 154, 'Seat 2P')}${T(580, 174, 'ERC-721 · save file', { size: 12, w: 500, fill: C.ink3 })}
-  `, 'A match turns two single-asset deposits into one position and two tradable seats.');
+  `, 'Example: a match turns two single-asset deposits into one position and two tradable seats.');
 }
 
 // 2. difficulty: the same price path against three range widths
@@ -98,7 +98,7 @@ export function figPayouts() {
     body += T(cx, y0 + 22, label, { size: 12.5, w: 800, anchor: 'middle' });
     body += T(cx, y0 + 40, p1 < 2000 ? 'cap applies: 1P gets less' : '1P repaid in full', { size: 11, w: 600, fill: p1 < 2000 ? C.red : C.ok, anchor: 'middle' });
   });
-  return svg('0 0 720 262', body, 'Mover rule at exit, ETH flat, before fees. The token moved more, so 2P carries the IL until the position no longer covers 1P.');
+  return svg('0 0 720 262', body, 'Worked example: 1 ETH at $2,000 + 20,000 NIMORI at $0.10, full range, ETH flat, before fees. The token moved more, so 2P carries the IL until the position no longer covers 1P.');
 }
 
 // 5. hot swap
