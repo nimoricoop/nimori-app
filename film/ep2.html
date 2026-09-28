@@ -123,7 +123,7 @@
       reg.style.opacity = t >= E.regA ? Math.max(0.34, Math.ceil(rp * 3) / 3) : 0;
       const u = t >= E.urlA ? typed('playnimori.com', E.urlA, t, 28) : '';
       url.innerHTML = t >= E.urlA ? u + cur(u.length < 14 || Math.floor((t - E.urlA) / 0.4) % 2 === 0) : '';
-      handle.textContent = t >= E.hA ? '@nimoricoop' : '';
+      handle.textContent = ''; // no handle on the end card
       handle.style.opacity = clamp01((t - E.hA) / 0.2).toFixed(3);
       return true;
     },
