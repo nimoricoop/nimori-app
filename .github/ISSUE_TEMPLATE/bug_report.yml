@@ -1,0 +1,16 @@
+name: Bug report
+description: Something on playnimori.com does not work
+labels: [bug]
+body:
+  - type: textarea
+    attributes: { label: What happened, description: What you did and what you expected. }
+    validations: { required: true }
+  - type: input
+    attributes: { label: Page, placeholder: "#/draw, #/lobby, #/arcade, #/docs" }
+  - type: input
+    attributes: { label: Browser, device and wallet, placeholder: "Chrome 140 · macOS · Rabby" }
+  - type: textarea
+    attributes: { label: Screenshot or console output }
+  - type: markdown
+    attributes:
+      value: "Never paste a seed phrase or private key. Security issues: see SECURITY.md, do not file them here."
