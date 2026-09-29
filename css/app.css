@@ -633,3 +633,5 @@ body[data-mode="screen"] .panel { display: none; }
 @keyframes boot-pop { from { transform: scale(.6); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .boot-logo, .boot-txt.start { animation: none; } }
 .gm-fig figcaption { display: block !important; margin-top: 6px; font-family: var(--crt); font-size: 17px; color: #6d4a40; }
+
+.gm-kv .warn { color: #ffb4a8; }

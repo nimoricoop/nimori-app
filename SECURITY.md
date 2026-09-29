@@ -24,6 +24,13 @@ Signing is free and sends nothing. It enters this wallet in the $NIMORI draw: on
 
 If a site or account asks for more than this, it is not us.
 
+## Draw integrity
+
+- One ticket per wallet, derived from the address; the signature is verified server-side.
+- Eligibility at the snapshot block: at least 1 transaction and some ETH for gas on Robinhood Chain.
+- The entry list is published with its SHA-256 before the seed block; `scripts/draw.js` reproduces the winners.
+- `/api/plug` is rate-limited per IP and the player count is cached.
+
 ## Reporting a vulnerability
 
 Please report privately by DM to [@nimoricoop](https://x.com/nimoricoop) on X, or with a GitHub private security advisory on this repository. Do not open a public issue for security problems.

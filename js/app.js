@@ -291,11 +291,16 @@ function draw() {
           ? `<p class="gm-text">This wallet is plugged in. One wallet, one ticket.</p>`
           : `<p class="gm-text">Sign one free message. No transaction, no approval, nothing leaves your wallet.</p>${gbtn(DRAW.busy ? 'CHECK YOUR WALLET…' : '▶ PLUG IN', `data-wsign ${DRAW.busy ? 'disabled' : ''}`, 'go')}${DRAW.error ? `<p class="gm-text warn">${esc(DRAW.error)}</p>` : ''}`,
         action: e ? null : doSign },
-      { label: 'MY TICKET', disabled: !e, body: () => `${ticketCard(e, !DRAW.rolled)}${gbtn('▶ SHARE ON X', 'data-wshare', 'go')}` },
+      { label: 'MY TICKET', disabled: !e, body: () => `${ticketCard(e, !DRAW.rolled)}
+          ${dots('ELIGIBLE NOW', e.eligibleNow ? '<span class="on">YES</span>' : '<span class="warn">NOT YET</span>')}
+          <p class="gm-text small">${e.eligibleNow ? 'This wallet has history and gas on Robinhood Chain. Keep it that way until the snapshot.' : 'To be eligible at the snapshot, this wallet needs at least 1 transaction and some ETH for gas on Robinhood Chain.'}</p>
+          ${gbtn('▶ SHARE ON X', 'data-wshare', 'go')}` },
       { label: 'SHARE ON X', disabled: !e, body: () => `<div class="gm-tweet">${esc(tweetText(e)).replace(/\n/g, '<br>')}</div>${gbtn('▶ POST IT', 'data-wshare', 'go')}`, action: shareOnX },
       { label: 'RULES', body: () => `
         <ol class="gm-list">
           <li><b>ONE WALLET, ONE TICKET.</b> Same odds for every ticket. The cartridge is cosmetic.</li>
+          <li><b>ELIGIBILITY.</b> At the snapshot block, a wallet needs at least 1 transaction sent and some ETH for gas on Robinhood Chain. Fresh empty wallets do not count.</li>
+          <li><b>VERIFIABLE.</b> Before the draw we publish the full entry list and its hash. The draw script is open source, anyone can re-run it and get the same winners.</li>
           <li><b>DRAWN AT LAUNCH, IN PUBLIC.</b> From a Robinhood Chain block hash announced in advance: nobody can pick the winners, us included.</li>
           <li><b>WINNERS GET A $NIMORI AIRDROP.</b> Amount and number of winners announced before the draw.</li>
           <li><b>STAY SAFE.</b> The draw never asks for a transaction, an approval or a seed phrase. We never DM first.</li>
@@ -312,7 +317,7 @@ async function doSign() {
     const issued = new Date().toISOString();
     const signature = await W.sign(drawMessage(acc.address, issued));
     const j = await drawApi('', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ address: acc.address, issued, signature }) });
-    DRAW.entry = { address: j.address, ticket: j.ticket, enteredAt: j.enteredAt };
+    DRAW.entry = { address: j.address, ticket: j.ticket, enteredAt: j.enteredAt, eligibleNow: j.eligibleNow };
     DRAW.players = j.players;
     DRAW.rolled = !!j.already;
     MENU_SEL.draw = 2;

@@ -28,6 +28,15 @@ function ticketFor(address) {
   return { code, cart };
 }
 
+/* Anti-farming rule, announced on the draw page and in the README, applied at the snapshot block:
+   the wallet must have sent at least one transaction on Robinhood Chain and hold some ETH for gas.
+   Creating wallets is free; a real history on the chain is not. */
+const ELIGIBILITY = 'At least 1 transaction sent and some ETH for gas on Robinhood Chain, checked at the snapshot block.';
+const eligible = (c) => !!c && c.nonce > 0 && BigInt(c.balanceWei || '0') > 0n;
+
+/* Registration closes at DRAW_CLOSES_AT (ISO time) when it is set. */
+const closesAt = () => { const t = Date.parse(process.env.DRAW_CLOSES_AT || ''); return Number.isFinite(t) ? t : null; };
+
 async function rpc(method, params) {
   const r = await fetch(RPC, {
     method: 'POST',
@@ -39,12 +48,13 @@ async function rpc(method, params) {
   return j.result;
 }
 /* Recorded with the entry, never used as a gate: newcomers are exactly who a launch wants. */
-async function chainFacts(address) {
-  const [n, b] = await Promise.all([rpc('eth_getTransactionCount', [address, 'latest']), rpc('eth_getBalance', [address, 'latest'])]);
+async function chainFacts(address, block = 'latest') {
+  const [n, b] = await Promise.all([rpc('eth_getTransactionCount', [address, block]), rpc('eth_getBalance', [address, block])]);
   return { nonce: Number(BigInt(n)), balanceWei: BigInt(b).toString() };
 }
 
 /* ---------- storage: Vercel Blob in production, a JSON file for local dev ---------- */
+const countCache = { n: 0, at: 0 };
 function readLocal() { try { return JSON.parse(fs.readFileSync(LOCAL_FILE, 'utf8')); } catch { return {}; } }
 const store = {
   async get(address) {
@@ -66,7 +76,15 @@ const store = {
       access: 'public', contentType: 'application/json', addRandomSuffix: false, allowOverwrite: false,
     });
   },
+  // Counting lists every entry, so it is cached per instance for 30 s (and GET responses are CDN-cached):
+  // a flood of page views can no longer turn into a flood of storage listings.
   async count() {
+    if (countCache.at && Date.now() - countCache.at < 30000) return countCache.n;
+    countCache.n = await this.countNow(); countCache.at = Date.now();
+    return countCache.n;
+  },
+  bump() { if (countCache.at) countCache.n += 1; },
+  async countNow() {
     if (!useBlob()) return Object.keys(readLocal()).length;
     const { list } = require('@vercel/blob');
     let n = 0, cursor;
@@ -78,4 +96,4 @@ const store = {
   },
 };
 
-module.exports = { entryMessage, ticketFor, chainFacts, store };
+module.exports = { entryMessage, ticketFor, chainFacts, store, rpc, eligible, ELIGIBILITY, closesAt, PREFIX };

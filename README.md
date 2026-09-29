@@ -93,13 +93,26 @@ Nobody has to sell half their bag to become an LP.
 - The signature is verified **server-side** before anything is stored.
 - The ticket is derived from the **address**, so signing again never re-rolls it.
 - **One ticket per wallet.** The cartridge on the ticket is cosmetic; every ticket has the same odds.
-- Winners come from a **Robinhood Chain block hash announced in advance**, so nobody can pick them, the team included.
+- **Anti-farming:** at the snapshot block, a wallet needs **at least 1 transaction sent and some ETH for gas on Robinhood Chain**. Fresh empty wallets do not count, so spinning up thousands of addresses buys nothing. The app shows each wallet whether it is eligible right now.
+- **Verifiable:** the entry list is frozen and published with its SHA-256 **before** the seed block exists; winners come from that **Robinhood Chain block hash**, with the open-source [`scripts/draw.js`](scripts/draw.js). Anyone can re-run it and get the same winners, so nobody can pick them, the team included.
 - Winners receive a **$NIMORI airdrop** after launch. Amount and number of winners are announced before the draw.
 
 > [!CAUTION]
 > The draw never asks for a transaction, an approval or a seed phrase, and the team never DMs first. Any post after the pinned *final tweet* that looks like it comes from us is a phishing attempt.
 
 <br clear="right">
+
+---
+
+### How the draw is run
+
+```bash
+node scripts/draw.js snapshot                                  # freeze entries → draw/snapshot.json + sha256 (published)
+node scripts/draw.js eligible --snapshot-block <N>             # apply the rule at the announced block (archive RPC)
+node scripts/draw.js run --seed-block <M> --winners <W>        # winners from the hash of block M (announced in advance)
+```
+
+Winners are drawn with a partial Fisher–Yates shuffle over the sorted eligible list, where step *i* uses `keccak256(blockHash ‖ i)`. Same inputs, same winners, for anyone.
 
 ---
 
@@ -191,7 +204,9 @@ Pons pools route all swap fees to the Pons hook and pay **zero** to LPs, so co-o
 ├── api/
 │   ├── plug.js           POST: verify signature → store 1 ticket per wallet · GET: count / lookup
 │   └── _shared.js        signed message, ticket derivation, storage (Blob or local file)
-├── scripts/dev-server.js static + /api locally, like Vercel
+├── scripts/
+│   ├── dev-server.js     static + /api locally, like Vercel
+│   └── draw.js           verifiable draw: snapshot → eligible → run
 ├── film/                 deterministic film pages for the videos
 ├── videos/               teaser (ch.1) and registration (ch.2)
 ├── docs/nimori-docs.md   full protocol docs
@@ -216,6 +231,7 @@ Locally the draw writes to `/tmp/nimori-draw.json`. On Vercel it uses Blob stora
 | `BLOB_READ_WRITE_TOKEN` | Vercel | Draw storage (linked Blob store) |
 | `RH_RPC` | optional | Robinhood Chain RPC, default `https://rpc.mainnet.chain.robinhood.com` |
 | `NIMORI_LOCAL_STORE` | optional | Local JSON file for dev entries |
+| `DRAW_CLOSES_AT` | Vercel | ISO time after which new entries are refused |
 
 ### Draw API
 
@@ -226,7 +242,9 @@ POST /api/plug                      → { "ok": true, "ticket": { "code": "NMR-�
      { "address": "0x…", "issued": "<ISO time>", "signature": "0x…" }
 ```
 
-Rejections: bad address or signature format (400), a signature older than 30 minutes (400), a signature that does not recover to the address (400). A second entry from the same wallet returns the existing ticket.
+Rejections: bad address or signature format (400), a signature older than 30 minutes (400), a signature that does not recover to the address (400), registration closed (403, after `DRAW_CLOSES_AT`). A second entry from the same wallet returns the existing ticket. Responses also carry `eligibleNow` (a hint read from the chain at entry time) and the eligibility `rule`.
+
+Abuse protection: the player count is cached (30 s per instance, CDN-cached `GET`), and `/api/plug` is rate-limited per IP by the Vercel Firewall.
 
 ---
 

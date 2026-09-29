@@ -16,7 +16,8 @@ http.createServer(async (req, res) => {
     try { req.body = raw ? JSON.parse(raw) : undefined; } catch { req.body = raw; }
     res.status = (s) => { res.statusCode = s; return res; };
     res.json = (o) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(o)); };
-    delete require.cache[require.resolve(file)];
+    // reload every api module (routes and their shared helpers) so edits show up without a restart
+    Object.keys(require.cache).filter((k) => k.startsWith(path.join(root, 'api'))).forEach((k) => delete require.cache[k]);
     return require(file)(req, res);
   }
   let p = path.join(root, decodeURIComponent(url.pathname));

@@ -3,10 +3,12 @@
    POST /api/plug {address, issued, signature} -> { ok, ticket, players }
    One entry per wallet. The signature is checked BEFORE anything touches the RPC or the store. */
 const { verifyMessage } = require('viem');
-const { entryMessage, ticketFor, chainFacts, store } = require('./_shared');
+const { entryMessage, ticketFor, chainFacts, store, eligible, ELIGIBILITY, closesAt } = require('./_shared');
 
 const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(a || '');
-const pub = (r) => r && { address: r.address, ticket: r.ticket, enteredAt: r.enteredAt };
+// `eligibleNow` is a hint from the chain at entry time; the rule is applied again at the snapshot block
+const pub = (r) => r && { address: r.address, ticket: r.ticket, enteredAt: r.enteredAt, eligibleNow: eligible(r.chain) };
+const meta = () => ({ rule: ELIGIBILITY, closesAt: closesAt() ? new Date(closesAt()).toISOString() : null });
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -15,15 +17,21 @@ module.exports = async (req, res) => {
       const url = new URL(req.url, 'http://x');
       const address = url.searchParams.get('address');
       const players = await store.count().catch(() => null);
-      if (!address) return res.status(200).json({ players });
+      if (!address) {
+        res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+        return res.status(200).json({ players, ...meta() });
+      }
       if (!isAddr(address)) return res.status(400).json({ error: 'bad address' });
-      return res.status(200).json({ entry: pub(await store.get(address)), players });
+      const entry = await store.get(address);
+      if (entry && !entry.chain) { try { entry.chain = await chainFacts(address); } catch { /* keep null */ } }
+      return res.status(200).json({ entry: pub(entry), players, ...meta() });
     }
     if (req.method !== 'POST') return res.status(405).json({ error: 'GET or POST only' });
 
     let body = req.body;
     if (typeof body === 'string') { try { body = JSON.parse(body); } catch { return res.status(400).json({ error: 'bad json' }); } }
     const { address, issued, signature } = body || {};
+    if (closesAt() && Date.now() > closesAt()) return res.status(403).json({ error: 'registration is closed' });
     if (!isAddr(address)) return res.status(400).json({ error: 'bad address' });
     if (!/^0x[0-9a-fA-F]{130}$/.test(signature || '')) return res.status(400).json({ error: 'bad signature' });
     const t = Date.parse(issued || '');
@@ -45,7 +53,8 @@ module.exports = async (req, res) => {
       issued, signature, chain,
     };
     await store.put(record);
-    return res.status(200).json({ ok: true, ...pub(record), players: await store.count().catch(() => null) });
+    store.bump();
+    return res.status(200).json({ ok: true, ...pub(record), players: await store.count().catch(() => null), ...meta() });
   } catch (e) {
     return res.status(500).json({ error: 'the entry could not be stored: ' + String((e && e.message) || e) });
   }
