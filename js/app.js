@@ -208,6 +208,10 @@ function docs() {
       { label: 'MOVER RULE', body: page('The asset that moved more since entry carries the IL. The non-mover gets their deposit back in their own asset, as long as the position covers it.', figPayouts()) },
       { label: 'HOT SWAP', body: page('When one player leaves, a player waiting on the same side and difficulty takes the empty seat. No unwind.', figHotSwap()) },
       { label: '$NIMORI', body: page('$NIMORI launched on Pons. Pons pools pay no swap fees to LPs, so co-op positions live in NIMORI pools instead.', figFees()) },
+      { label: 'SOURCE CODE', body: () => `
+        <p class="gm-text">The app, the draw API and the draw script are open source. Read them, run them, verify the draw yourself.</p>
+        ${dots('REPO', 'NIMORICOOP/NIMORI-APP')}${dots('DRAW SCRIPT', 'SCRIPTS/DRAW.JS')}
+        <a class="gb go" href="https://github.com/nimoricoop/nimori-app" target="_blank" rel="noopener">▶ OPEN GITHUB</a>` },
       { label: 'RISKS', body: () => `
         <ol class="gm-list">
           <li><b>CONTRACTS</b> can have bugs. Audit status is published before deposits open.</li>

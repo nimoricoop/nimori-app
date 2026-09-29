@@ -635,3 +635,6 @@ body[data-mode="screen"] .panel { display: none; }
 .gm-fig figcaption { display: block !important; margin-top: 6px; font-family: var(--crt); font-size: 17px; color: #6d4a40; }
 
 .gm-kv .warn { color: #ffb4a8; }
+
+a.sound { text-decoration: none; }
+.sound.gh:hover { background: rgba(254,243,213,.26); }
