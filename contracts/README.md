@@ -7,6 +7,7 @@ Solidity for the NIMORI protocol on **Robinhood Chain (4663)**. Foundry, solc 0.
 | Contract | Address | Source |
 |---|---|---|
 | `NimoriArcade` | [`0x3341b6130eB70A39e2304Cf5eCB6B1fd533dA959`](https://robinhoodchain.blockscout.com/address/0x3341b6130eB70A39e2304Cf5eCB6B1fd533dA959) | Sourcify exact match |
+| `$NIMORI` (Pons V2) | [`0x168A0935Fa187Ddd75473A469282B7b8461aa99e`](https://robinhoodchain.blockscout.com/address/0x168A0935Fa187Ddd75473A469282B7b8461aa99e) | staking token of the Arcade |
 
 ## NimoriArcade: stake $NIMORI, earn ETH
 
