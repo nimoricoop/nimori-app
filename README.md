@@ -37,7 +37,7 @@ NIMORI turns liquidity into a **two-player mode**.
 Nobody has to sell half their bag to become an LP.
 
 > [!IMPORTANT]
-> NIMORI is **pre-launch**. No protocol contract is deployed and no deposit is possible yet. The only live feature is the **$NIMORI pre-launch draw**. The app shows no simulated balances, prices or APRs.
+> $NIMORI is live on Pons. The first protocol contract, the **Arcade** (stake $NIMORI, earn ETH), is deployed and verified on Robinhood Chain: see [`contracts/`](contracts). Co-op lobbies are being built in public and are **not deployed**: no co-op deposit is possible yet. The app shows no simulated balances, prices or APRs.
 
 ---
 
@@ -208,7 +208,8 @@ Pons pools route all swap fees to the Pons hook and pay **zero** to LPs, so co-o
 │   ├── dev-server.js     static + /api locally, like Vercel
 │   └── draw.js           verifiable draw: snapshot → eligible → run
 ├── film/                 deterministic film pages for the videos
-├── videos/               teaser (ch.1) and registration (ch.2)
+├── videos/               teaser, registration, launch, roadmap, live, player 2
+├── contracts/            Solidity (Foundry): NimoriArcade, co-op lobbies next
 ├── docs/nimori-docs.md   full protocol docs
 └── brand/                logo, wordmark, social visuals
 ```
@@ -254,6 +255,10 @@ Abuse protection: the player count is cached (30 s per instance, CDN-cached `GET
 |---|---|
 | **Chapter 1** · the teaser | [`videos/nimori-teaser.mp4`](videos/nimori-teaser.mp4): the RANGE LEDs rise, the 2nd cable plugs in, the lid opens… cut. |
 | **Chapter 2** · registration open | [`videos/nimori-ep2.mp4`](videos/nimori-ep2.mp4): the console boots into the draw menu, a ticket rolls and locks. |
+| **Chapter 3** · launch tomorrow | [`videos/nimori-launch.mp4`](videos/nimori-launch.mp4): full power, READY, LAUNCH · TOMORROW · 10.01. |
+| **Chapter 4** · roadmap | [`videos/nimori-roadmap.mp4`](videos/nimori-roadmap.mp4): world select, stage 0 to the boss level. |
+| **Chapter 5** · live | [`videos/nimori-live.mp4`](videos/nimori-live.mp4): GAME START · $NIMORI IS LIVE ON PONS. |
+| **Chapter 6** · player 2 | [`videos/nimori-player2.mp4`](videos/nimori-player2.mp4): port 2 empty… plugged. No NIMORI, no game. |
 
 <div align="center">
 <img src=".github/assets/range-leds.gif" alt="RANGE LEDs lighting up" width="60%">
@@ -266,9 +271,10 @@ Abuse protection: the player count is cached (30 s per instance, CDN-cached `GET
 - [x] Brand, console, retro game UI
 - [x] Manual with illustrated rules
 - [x] **Pre-launch draw**: live on [playnimori.com](https://playnimori.com)
-- [ ] $NIMORI launch on Pons
+- [x] $NIMORI launch on Pons
 - [ ] Public draw from an announced Robinhood Chain block, airdrop to winners
-- [ ] Contracts: `Lobby`, `Matcher`, `Session`, `Seat`, `Oracle`, `Arcade`, NIMORI v4 hook
+- [x] `NimoriArcade` deployed + verified: [`0x3341…a959`](https://robinhoodchain.blockscout.com/address/0x3341b6130eB70A39e2304Cf5eCB6B1fd533dA959)
+- [ ] Co-op lobbies: queues, matcher, seat NFTs, mover rule, NIMORI v4 hook (building in public)
 - [ ] Audit status published before deposits open
 - [ ] First lobby: NIMORI / ETH
 

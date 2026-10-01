@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NIMORI stills</title>
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Rubik:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;700&family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<style>
+  html, body { margin: 0; background: #000; overflow: hidden; }
+  #stage { position: relative; width: 1600px; height: 900px; overflow: hidden; background: #000; }
+  #stage canvas { display: block; }
+  .layer { position: absolute; inset: 0; pointer-events: none; }
+  /* sunburst rays tint the top band behind the title, fading out before the console */
+  #rays { overflow: hidden; -webkit-mask-image: linear-gradient(#000 0, #000 13%, transparent 24%); mask-image: linear-gradient(#000 0, #000 13%, transparent 24%); mix-blend-mode: screen; opacity: .55; }
+  #rays i { position: absolute; left: 50%; top: 22%; width: 3000px; height: 3000px; margin: -1500px 0 0 -1500px; border-radius: 50%;
+            background: repeating-conic-gradient(from 3deg, rgba(230,2,17,.55) 0deg 7.5deg, rgba(230,2,17,0) 7.5deg 15deg); }
+  #shade { background: linear-gradient(rgba(20,0,2,.55) 0, rgba(20,0,2,.25) 20%, rgba(20,0,2,0) 30%); }
+  #vignette { background: radial-gradient(ellipse 80% 75% at 50% 55%, rgba(0,0,0,0) 50%, rgba(8,0,0,0.7) 100%); }
+  #grain { opacity: .05; mix-blend-mode: overlay; width: 100%; height: 100%; }
+  #head { position: absolute; left: 0; right: 0; top: 30px; text-align: center; font: 26px/1 "Press Start 2P", monospace; letter-spacing: .12em;
+          color: #F3AE15; text-shadow: 3px 3px 0 #6A0200; }
+  #title { position: absolute; left: 0; right: 0; top: 88px; text-align: center; font: 64px/1 "Press Start 2P", monospace; white-space: pre; letter-spacing: .02em; }
+  #foot { position: absolute; left: 0; right: 0; bottom: 22px; text-align: center; font: 26px/1 "Press Start 2P", monospace; letter-spacing: .06em;
+          color: #FEF3D5; text-shadow: 3px 3px 0 #6A0200, -2px 0 0 #000, 2px 0 0 #000, 0 -2px 0 #000, 0 2px 0 #000; }
+  #foot b { display: inline-block; padding: 12px 20px 10px; background: rgba(30,0,2,.82); border-radius: 8px; box-shadow: inset 0 0 0 3px #FEF3D5, inset 0 0 0 6px #000, 0 5px 0 #000; font-weight: 400; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="layer" id="rays"><i></i></div>
+  <div class="layer" id="shade"></div>
+  <div class="layer" id="vignette"></div>
+  <canvas class="layer" id="grain" width="800" height="450"></canvas>
+  <div id="head"></div>
+  <div id="title"></div>
+  <div id="foot"></div>
+</div>
+<script type="module">
+  await document.fonts.ready;
+  await Promise.all([
+    document.fonts.load('400 96px "Lilita One"'),
+    document.fonts.load('700 44px "IBM Plex Mono"'),
+    document.fonts.load('22px "Press Start 2P"'),
+    document.fonts.load('30px "VT323"'),
+  ]);
+  const { createFilmScene } = await import('./scene-stills.js');
+  const stage = document.getElementById('stage');
+  const film = createFilmScene(stage, { width: 1600, height: 900 });
+  stage.insertBefore(film.renderer.domElement, stage.firstChild);
+  film.renderer.domElement.style.position = 'absolute';
+  await film.ready;
+  const $ = (id) => document.getElementById(id);
+
+  const gctx = $('grain').getContext('2d');
+  const gimg = gctx.createImageData(800, 450);
+  let s = 2654435761 >>> 0;
+  for (let i = 0; i < gimg.data.length; i += 4) { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; const v = s & 255; gimg.data[i] = gimg.data[i + 1] = gimg.data[i + 2] = v; gimg.data[i + 3] = 255; }
+  gctx.putImageData(gimg, 0, 0);
+
+  function extrude(el, depth, face, depthCol, edge) {
+    const sh = [];
+    for (let i = 1; i <= depth; i++) sh.push(`${i}px ${i}px 0 ${depthCol}`);
+    for (let i = depth + 1; i <= depth + 4; i++) sh.push(`${i}px ${i}px 0 ${edge}`);
+    [[-4, 0], [4, 0], [0, -4], [0, 4], [-4, -4], [4, -4], [-4, 4]].forEach(([x, y]) => sh.push(`${x}px ${y}px 0 ${edge}`));
+    el.style.textShadow = sh.join(',');
+    el.style.color = face;
+  }
+  extrude($('title'), 8, '#FEF3D5', '#F3AE15', '#6A0200');
+
+  const STILLS = {
+    'thread-1': { head: 'HOW TO PLAY 1/4', title: '1P + 2P = 1 POSITION', cam: { screen: 'lobby', yaw: -10 } },
+    'thread-2': { head: 'HOW TO PLAY 2/4', title: 'SEAT NFT = SAVE FILE', cam: { screen: 'seats', yaw: 10 } },
+    'thread-3': { head: 'HOW TO PLAY 3/4', title: 'MOVER RULE', cam: { screen: 'mover', yaw: -10 } },
+    'thread-4': { head: 'HOW TO PLAY 4/4', title: '24H · RAGE QUIT 1%', foot: 'playnimori.com', cam: { screen: 'timer', yaw: 10 } },
+    'open-source': { head: 'OPEN SOURCE', title: 'BUILT IN THE OPEN', foot: 'github.com/nimoricoop/nimori-app', cam: { screen: 'terminal', yaw: 0 } },
+  };
+  window.__still = {
+    names: Object.keys(STILLS),
+    render(name, over = {}) {
+      const st = STILLS[name];
+      $('head').textContent = st.head;
+      $('title').textContent = st.title;
+      $('foot').innerHTML = st.foot ? `<b>${st.foot}</b>` : '';
+      film.renderStill({ ...st.cam, ...over });
+      return true;
+    },
+  };
+  window.__still.render('thread-1');
+  document.title = 'NIMORI stills · ready';
+</script>
+</body>
+</html>

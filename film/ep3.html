@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NIMORI film rig ep.3</title>
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Rubik:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;700&family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<style>
+  html, body { margin: 0; background: #000; overflow: hidden; }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+  #stage canvas { display: block; }
+  .layer { position: absolute; inset: 0; pointer-events: none; }
+  #vignette { background: radial-gradient(ellipse 75% 70% at 50% 50%, rgba(0,0,0,0) 45%, rgba(8,0,0,0.78) 100%); }
+  #grain { opacity: .06; mix-blend-mode: overlay; width: 100%; height: 100%; }
+  #black { background: #000; }
+  #flash { background: #FEF3D5; opacity: 0; }
+  .card { display: flex; align-items: center; justify-content: center; flex-direction: column; opacity: 0; overflow: hidden; }
+  .card.red { background: #E60211; }
+  .card.blk { background: #0B0B0B; }
+  .rays { position: absolute; left: 50%; top: 50%; width: 3200px; height: 3200px; margin: -1600px 0 0 -1600px; border-radius: 50%; }
+  .red .rays { background: repeating-conic-gradient(from 0deg, rgba(106,2,0,.34) 0deg 7.5deg, rgba(106,2,0,0) 7.5deg 15deg); }
+  .blk .rays { background: repeating-conic-gradient(from 0deg, rgba(230,2,17,.16) 0deg 7.5deg, rgba(230,2,17,0) 7.5deg 15deg); }
+  .red::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse 70% 65% at 50% 50%, rgba(255,40,40,0) 40%, rgba(60,0,0,.55) 100%); }
+  .big { position: relative; z-index: 1; font-family: "Press Start 2P", monospace; white-space: pre; line-height: 1; }
+  #launch .big { font-size: 236px; color: #FEF3D5; }
+  #tomorrow .big { font-size: 176px; color: #F3AE15; }
+  #date .big { font-size: 300px; color: #FEF3D5; }
+  #endcard { background: radial-gradient(ellipse 60% 55% at 50% 45%, #2a0204 0%, #000 72%); }
+  #endcard .stack { display: flex; flex-direction: column; align-items: center; }
+  #endcard img { width: 860px; height: auto; }
+  #edate { margin-top: 56px; font: 96px/1 "Press Start 2P", monospace; color: #F3AE15; text-shadow: 8px 8px 0 #6A0200; letter-spacing: .04em; }
+  #eurl { margin-top: 60px; font: 30px/1 "Press Start 2P", monospace; letter-spacing: .08em; color: #FEF3D5; }
+  #scan { background: repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 2px, transparent 2px 5px); opacity: 0; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="layer" id="vignette"></div>
+  <div class="layer card red" id="launch"><div class="rays"></div><div class="big">LAUNCH</div></div>
+  <div class="layer card blk" id="tomorrow"><div class="rays"></div><div class="big">TOMORROW</div></div>
+  <div class="layer card red" id="date"><div class="rays"></div><div class="big">10.01</div></div>
+  <div class="layer card" id="endcard"><div class="stack"><img id="wm" src="../img/wordmark-lg.webp" alt=""><div id="edate">10.01</div><div id="eurl">playnimori.com</div></div></div>
+  <div class="layer" id="scan"></div>
+  <div class="layer" id="black"></div>
+  <div class="layer" id="flash"></div>
+  <canvas class="layer" id="grain" width="960" height="540"></canvas>
+</div>
+<script type="module">
+  await document.fonts.ready;
+  await Promise.all([
+    document.fonts.load('400 96px "Lilita One"'),
+    document.fonts.load('700 44px "IBM Plex Mono"'),
+    document.fonts.load('22px "Press Start 2P"'),
+    document.fonts.load('30px "VT323"'),
+  ]);
+  const { createFilmScene } = await import('./scene-ep3.js');
+  const stage = document.getElementById('stage');
+  const film = createFilmScene(stage, { width: 1920, height: 1080 });
+  stage.insertBefore(film.renderer.domElement, stage.firstChild);
+  film.renderer.domElement.style.position = 'absolute';
+  await film.ready;
+  const wm = document.getElementById('wm'); await wm.decode().catch(() => {});
+
+  const $ = (id) => document.getElementById(id);
+  const black = $('black'), flash = $('flash'), scan = $('scan'), grain = $('grain');
+  const gctx = grain.getContext('2d');
+  const gimg = gctx.createImageData(960, 540);
+  function drawGrain(frame) {
+    let s = (frame * 2654435761) >>> 0 || 1;
+    for (let i = 0; i < gimg.data.length; i += 4) {
+      s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0;
+      const v = s & 255; gimg.data[i] = gimg.data[i + 1] = gimg.data[i + 2] = v; gimg.data[i + 3] = 255;
+    }
+    gctx.putImageData(gimg, 0, 0);
+  }
+  // chunky extrusion like the logo: cream face, amber depth, maroon contour
+  function extrude(el, depth, face, depthCol, edge) {
+    const sh = [];
+    for (let i = 1; i <= depth; i++) sh.push(`${i}px ${i}px 0 ${depthCol}`);
+    for (let i = depth + 1; i <= depth + 6; i++) sh.push(`${i}px ${i}px 0 ${edge}`);
+    [[-5, 0], [5, 0], [0, -5], [0, 5], [-5, -5], [5, -5], [-5, 5]].forEach(([x, y]) => sh.push(`${x}px ${y}px 0 ${edge}`));
+    el.style.textShadow = sh.join(',');
+    el.style.color = face;
+  }
+  extrude($('launch').querySelector('.big'), 16, '#FEF3D5', '#F3AE15', '#6A0200');
+  extrude($('tomorrow').querySelector('.big'), 12, '#F3AE15', '#6A0200', '#2a0000');
+  extrude($('date').querySelector('.big'), 22, '#FEF3D5', '#F3AE15', '#6A0200');
+
+  const T = film.T, BT = T.BT;
+  const bk = (k) => BT.t0 + k * BT.beat;
+  const FR = 1 / 30;
+  const CARDS = [
+    { el: $('launch'), a: bk(12), b: bk(14), flash: '#FEF3D5' },
+    { el: $('tomorrow'), a: bk(14), b: bk(16), flash: '#E60211' },
+    { el: $('date'), a: bk(16), b: bk(20), flash: '#FEF3D5' },
+  ];
+  const END = { a: bk(20), end: bk(20) + 2.4 };
+  const easeOut = (u) => 1 - Math.pow(1 - Math.min(1, Math.max(0, u)), 3);
+  const beatDecay = (t, rate) => { const k = Math.floor((t - BT.t0) / BT.beat + 1e-6); return k < 0 ? 0 : Math.exp(-(t - bk(k)) * rate); };
+  function cardShake(d, amp) { const e = amp * Math.exp(-d * 12); return [e * Math.sin(d * 83), e * Math.cos(d * 67)]; }
+
+  window.__cine = {
+    duration: END.end,
+    T, CARDS, END, CAM: film.CAM,
+    renderAt(t) {
+      const frame = Math.round(t * 30);
+      drawGrain(frame);
+      flash.style.opacity = 0; black.style.opacity = 0; scan.style.opacity = 0;
+      CARDS.forEach((c) => { c.el.style.opacity = 0; });
+      $('endcard').style.opacity = 0;
+      // pre-roll: black until the hit (frame 6)
+      if (t < T.hit - 1e-6) { black.style.opacity = 1; return true; }
+      if (t < T.cut - 1e-6) {
+        film.renderAt(t);
+        const d = t - T.hit;
+        // 2-frame cream flash on the hit
+        flash.style.background = '#FEF3D5';
+        flash.style.opacity = d < FR * 0.5 ? 0.92 : d < FR * 1.5 ? 0.45 : 0;
+        return true;
+      }
+      scan.style.opacity = 0.35;
+      for (const c of CARDS) {
+        if (t >= c.a - 1e-6 && t < c.b - 1e-6) {
+          const d = t - c.a;
+          c.el.style.opacity = 1;
+          const big = c.el.querySelector('.big'), rays = c.el.querySelector('.rays');
+          const punch = 1.22 - 0.22 * easeOut(d / (4 * FR));
+          const pump = 1 + 0.035 * beatDecay(t, 11) * (d > 0.2 ? 1 : 0);
+          const s = punch * pump * (1 + 0.025 * d);
+          const [sx, sy] = cardShake(d, 26);
+          big.style.transform = `translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px) scale(${s.toFixed(4)})`;
+          rays.style.transform = `rotate(${(t * 14).toFixed(2)}deg) scale(${(1 + 0.04 * beatDecay(t, 8)).toFixed(3)})`;
+          // 1-frame flash on the cut, half a frame of afterglow
+          flash.style.background = c.flash;
+          flash.style.opacity = d < FR * 0.5 ? 1 : d < FR * 1.5 ? 0.35 : 0;
+          return true;
+        }
+      }
+      // end card
+      const d = t - END.a;
+      const ec = $('endcard'); ec.style.opacity = 1; scan.style.opacity = 0.3;
+      const s = (1.12 - 0.12 * easeOut(d / (5 * FR))) * (1 + 0.012 * d);
+      const [sx, sy] = cardShake(d, 18);
+      ec.querySelector('.stack').style.transform = `translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px) scale(${s.toFixed(4)})`;
+      $('edate').style.opacity = 1; $('eurl').style.opacity = 1;
+      flash.style.background = '#FEF3D5';
+      flash.style.opacity = d < FR * 0.5 ? 1 : d < FR * 1.5 ? 0.4 : 0;
+      return true;
+    },
+  };
+  window.__cine.renderAt(0);
+  document.title = 'NIMORI film rig ep.3 · ready';
+</script>
+</body>
+</html>
