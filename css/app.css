@@ -638,3 +638,12 @@ body[data-mode="screen"] .panel { display: none; }
 
 a.sound { text-decoration: none; }
 .sound.gh:hover { background: rgba(254,243,213,.26); }
+
+/* ---------- arcade amount box ---------- */
+.gm-amount { display: flex; gap: 8px; margin: 10px 0 12px; }
+.gm-amount input {
+  flex: 1; min-width: 0; padding: 8px 10px; font-family: var(--crt); font-size: 24px; color: var(--gm-ink);
+  background: rgba(0,0,0,.45); border: 2px solid rgba(254,243,213,.55); border-radius: 0; outline: none;
+}
+.gm-amount input:focus { border-color: #F3AE15; }
+.gm-amount .gb { flex: 0 0 auto; }

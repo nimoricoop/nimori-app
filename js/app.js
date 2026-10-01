@@ -1,9 +1,10 @@
 // NIMORI — app shell + hash router.
 // The router rewrites the side panel (Lobby) or the page laid over the console screen. The 3D console (#stage) is mounted once.
-// Pre-launch: no contract is live, so nothing here shows a number that is not real. The draw is the only live feature.
+// $NIMORI is live. The Arcade reads real numbers off the chain; co-op lobbies are not deployed, so they show no numbers.
 import { createScene } from './scene.js';
 import { sfx, playedJustNow, isMuted, setMuted } from './sound.js';
 import * as W from './wallet.js';
+import * as C from './chain.js';
 import { figMatch, figDifficulty, figTimeline, figPayouts, figHotSwap, figFees } from './figs.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -30,7 +31,7 @@ const I = {
   exit: '<svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l-5-5 5-5M5 12h11"/></svg>',
 };
 
-// ---------- state (pre-launch: no simulated queues, prices or balances) ----------
+// ---------- state (no simulated queues, prices or balances) ----------
 // `plugged` = this browser's wallet is entered in the draw: the second cable goes in for real.
 const state = { difficulty: 'normal', plugged: false };
 const DIFF = {
@@ -95,10 +96,10 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#mod
 function lobby() {
   const e = DRAW.entry;
   return `
-    <a class="draw-banner" href="#/draw"><span>PRE-LAUNCH</span><b>${e ? 'You are plugged in. Ticket ' + e.ticket.code : 'Plug in your wallet, get a ticket for the $NIMORI draw'}</b><i>→</i></a>
+    <a class="draw-banner" href="#/draw"><span>$NIMORI DRAW</span><b>${e ? 'You are plugged in. Ticket ' + e.ticket.code : 'Plug in your wallet, get a ticket for the $NIMORI draw'}</b><i>→</i></a>
     <p class="eyebrow">Lobby · NIMORI / ETH</p>
     <h1>${e ? 'Player 2 connected.' : 'Waiting for player 2.'}</h1>
-    <p class="lede">Player 1 brings ETH, player 2 brings the token. NIMORI matches them into one position with two seats. Lobbies open at launch.</p>
+    <p class="lede">Player 1 brings ETH, player 2 brings the token. NIMORI matches them into one position with two seats. Co-op lobbies are being built in public: not deployed yet.</p>
 
     <div class="pairbar">
       <span class="pair"><span class="coin eth">Ξ</span><span class="coin">N</span>NIMORI / ETH</span>
@@ -114,14 +115,14 @@ function lobby() {
     <div class="queues">
       <div class="queue">
         <div class="queue-h"><b>1P</b><span>ETH queue · ${DIFF[state.difficulty].label}</span></div>
-        <ol><li class="empty"><span>opens at launch</span><span>—</span></li></ol>
+        <ol><li class="empty"><span>not deployed yet</span><span>—</span></li></ol>
       </div>
       <div class="queue">
         <div class="queue-h"><b>2P</b><span>NIMORI queue</span></div>
-        <ol><li class="empty"><span>opens at launch</span><span>—</span></li></ol>
+        <ol><li class="empty"><span>not deployed yet</span><span>—</span></li></ol>
       </div>
     </div>
-    <p class="muted" style="margin-top:8px">At launch: deposits are matched FIFO by value, same difficulty only. Unmatched deposits can be withdrawn anytime, free.</p>
+    <p class="muted" style="margin-top:8px">When lobbies open: deposits are matched FIFO by value, same difficulty only. Unmatched deposits can be withdrawn anytime, free.</p>
 
     <div class="status ${e ? 'ok' : ''}">
       <span class="dot"></span>
@@ -174,24 +175,103 @@ function moverRule() {
     </ol>`;
 }
 
+// ---------- arcade: live on Robinhood Chain ----------
+// Every number on this page is read off the Arcade contract. Nothing is estimated: no APR (no NIMORI price here).
+const ARC = { s: null, err: '', busy: '', msg: '', amount: '', loading: false, timer: 0 };
+async function loadArcade() {
+  if (ARC.loading) return;
+  ARC.loading = true;
+  try { ARC.s = await C.arcadeState(W.account()?.address); ARC.err = ''; }
+  catch (e) { ARC.err = 'Could not read the chain. Retrying…'; }
+  ARC.loading = false;
+  if (routeName() === 'arcade') {
+    // never re-render under the user's typing: it would drop focus from the amount box
+    if (!document.activeElement?.matches?.('[data-arc-amount]')) render();
+    scene?.setScreen(screenFor('arcade'));
+  }
+}
+function arcadePoll(on) {
+  clearInterval(ARC.timer);
+  if (on) { loadArcade(); ARC.timer = setInterval(loadArcade, 15000); }
+}
+const eth = (v) => C.fmtUnits(v, 18, 5);
+const tok = (v) => C.fmtUnits(v, ARC.s?.decimals ?? 18, 2);
+const ethPerDay = (s) => (s && s.remaining > 0n ? (s.rate * 86400n) / 10n ** 18n : 0n);
+async function arcadeTx(label, fn) {
+  const acc = W.account();
+  if (!acc) return openWalletPicker();
+  ARC.busy = label; ARC.msg = ''; render();
+  try { await fn(acc); ARC.msg = label + ' done.'; sfx('coin'); }
+  catch (e) { ARC.msg = (e?.code === 4001 ? 'Rejected in your wallet.' : (e?.message || 'Failed.')).slice(0, 140); }
+  ARC.busy = ''; await loadArcade(); render();
+}
+function readAmount() {
+  const v = $('[data-arc-amount]')?.value ?? ARC.amount;
+  ARC.amount = v;
+  return C.units(v, ARC.s?.decimals ?? 18);
+}
+async function doStake() {
+  let amt; try { amt = readAmount(); } catch (e) { ARC.msg = e.message; return render(); }
+  if (amt <= 0n) { ARC.msg = 'Enter an amount.'; return render(); }
+  await arcadeTx('STAKE', async (acc) => {
+    const u = ARC.s.user;
+    if (!u || u.allowance < amt) { ARC.busy = 'APPROVE (1/2)'; render(); await C.tx.approve(acc, ARC.s.token, amt); ARC.busy = 'STAKE (2/2)'; render(); }
+    await C.tx.stake(acc, amt);
+  });
+}
+async function doWithdraw() {
+  let amt; try { amt = readAmount(); } catch (e) { ARC.msg = e.message; return render(); }
+  if (amt <= 0n) { ARC.msg = 'Enter an amount.'; return render(); }
+  await arcadeTx('WITHDRAW', (acc) => C.tx.withdraw(acc, amt));
+}
+
 function arcade() {
+  const s = ARC.s, u = s?.user, acc = W.account();
+  const live = !!s?.token;
+  const busy = !!ARC.busy;
+  const now = Date.now() / 1000;
+  const status = !s ? 'READING CHAIN…' : live ? 'LIVE · ROBINHOOD CHAIN' : 'DEPLOYED · TOKEN NEXT';
+  const note = `${ARC.busy ? `<p class="gm-text">${esc(ARC.busy)}… CHECK YOUR WALLET</p>` : ''}${ARC.msg ? `<p class="gm-text ${/done/.test(ARC.msg) ? '' : 'warn'}">${esc(ARC.msg)}</p>` : ''}${ARC.err ? `<p class="gm-text warn">${esc(ARC.err)}</p>` : ''}`;
+  const connect = gbtn('▶ CONNECT WALLET', 'data-wconnect', 'go');
+  const amountBox = (max) => `<div class="gm-amount"><input data-arc-amount inputmode="decimal" autocomplete="off" placeholder="0.0" value="${esc(ARC.amount)}" ${busy ? 'disabled' : ''}>${max != null ? `<button type="button" class="gb" data-arc-max="${C.fmtUnits(max, s.decimals, s.decimals).replace(/,/g, '')}">MAX</button>` : ''}</div>`;
   return gameMenu('arcade', {
     title: 'ARCADE',
-    status: 'OPENS AT LAUNCH',
+    status,
     items: [
-      { label: 'STAKE', body: () => `
-        <p class="gm-text">Staking $NIMORI opens once the token is live on Pons, the Robinhood Chain launchpad.</p>
-        ${dots('FEE SHARE', '10% OF CO-OP FEES')}${dots('PRIORITY PASS', 'STAKERS FIRST')}${dots('PAIR VOTE', 'ON')}
-        <p class="gm-text small">No APR is shown: there is no volume yet, so any number would be made up.</p>
-        ${gbtn('▶ ENTER THE DRAW', 'data-go="draw"', 'go')}` },
-      { label: 'PERKS', body: () => `
-        <ol class="gm-list">
-          <li><b>FEE SHARE.</b> 10% of co-op trading fees, paid in ETH and pair tokens.</li>
-          <li><b>PRIORITY PASS.</b> Stakers get matched first in lobby queues.</li>
-          <li><b>PAIR VOTE.</b> Stakers choose which pairs open a lobby.</li>
-        </ol>` },
-      { label: 'PAIR VOTE', body: () => `<p class="gm-text">The first lobby is NIMORI / ETH. Stakers vote on the next pairs after launch.</p>` },
-      { label: 'RISK', body: () => `<p class="gm-text">Staked NIMORI will be exposed to the token price and to smart contract risk. No audit is claimed here.</p>` },
+      { label: 'STAKE', body: () => !s ? `<p class="gm-text">Reading the Arcade contract…</p>${note}`
+        : !live ? `<p class="gm-text">The Arcade contract is deployed and verified. Staking opens as soon as the $NIMORI token address is set on it.</p>${dots('CONTRACT', 'LIVE')}${dots('TOKEN', 'BEING SET')}${dots('ETH QUEUED', eth(s.queued))}${note}`
+        : !acc ? `<p class="gm-text">Stake $NIMORI, earn ETH. Withdraw anytime.</p>${connect}${note}`
+        : `${dots('WALLET', tok(u.wallet) + ' NIMORI')}${dots('STAKED', tok(u.mine) + ' NIMORI')}
+           ${amountBox(u.wallet)}
+           ${gbtn(busy ? ARC.busy + '…' : (u.allowance > 0n ? '▶ STAKE' : '▶ APPROVE + STAKE'), `data-arc-stake ${busy ? 'disabled' : ''}`, 'go')}
+           <p class="gm-text small">First stake asks for 2 transactions: approve, then stake.</p>${note}`,
+        action: live ? (acc ? doStake : openWalletPicker) : null },
+      { label: 'WITHDRAW', disabled: !live, body: () => !acc ? `${connect}${note}` : `
+           ${dots('STAKED', tok(u?.mine ?? 0n) + ' NIMORI')}
+           ${amountBox(u?.mine ?? 0n)}
+           ${gbtn(busy ? ARC.busy + '…' : '▶ WITHDRAW', `data-arc-withdraw ${busy ? 'disabled' : ''}`, 'go')}
+           <p class="gm-text small">Always open. No lock, no fee.</p>${note}` },
+      { label: 'CLAIM ETH', disabled: !live, body: () => !acc ? `${connect}${note}` : `
+           ${dots('EARNED', eth(u?.earned ?? 0n) + ' ETH')}
+           ${gbtn(busy ? ARC.busy + '…' : '▶ CLAIM', `data-arc-claim ${busy || !u?.earned ? 'disabled' : ''}`, 'go')}
+           ${u?.mine ? gbtn('▶ EXIT: WITHDRAW ALL + CLAIM', `data-arc-exit ${busy ? 'disabled' : ''}`) : ''}${note}` },
+      { label: 'REWARDS', body: () => !s ? '<p class="gm-text">…</p>' : `
+           ${dots('TOTAL STAKED', live ? tok(s.staked) + ' NIMORI' : '—')}
+           ${dots('STREAMING', s.remaining > 0n ? eth(ethPerDay(s)) + ' ETH / DAY' : 'IDLE')}
+           ${dots('LEFT THIS ROUND', eth(s.remaining) + ' ETH')}
+           ${dots('ROUND ENDS', s.finish > now ? new Date(s.finish * 1000).toUTCString().slice(5, 22) + ' UTC' : '—')}
+           ${dots('QUEUED NEXT ROUND', eth(s.queued) + ' ETH')}
+           <p class="gm-text small">ETH sent to the Arcade waits in the queue, then streams to stakers over ${Math.round(s.duration / 86400)} days. When a round ends, anyone can start the next.</p>
+           ${live && s.finish <= now && s.queued > 0n ? gbtn(busy ? ARC.busy + '…' : '▶ START NEXT ROUND', `data-arc-kick ${busy ? 'disabled' : ''}`, 'go') : ''}${note}` },
+      { label: 'CONTRACT', body: () => `
+           ${dots('ARCADE', C.ARCADE.slice(0, 6) + '…' + C.ARCADE.slice(-4))}${dots('SOURCE', 'VERIFIED')}${dots('TOKEN', s?.token ? s.token.slice(0, 6) + '…' + s.token.slice(-4) : 'NOT SET YET')}
+           <ol class="gm-list">
+             <li><b>WITHDRAW</b> is always open: no pause, no lock.</li>
+             <li><b>OWNER</b> cannot touch staked NIMORI or ETH owed to stakers.</li>
+             <li><b>RISK.</b> Smart contracts can have bugs. No audit is claimed.</li>
+           </ol>
+           <a class="gb go" href="${C.EXPLORER}/address/${C.ARCADE}" target="_blank" rel="noopener">▶ OPEN EXPLORER</a>
+           <a class="gb" href="https://github.com/nimoricoop/nimori-app/tree/main/contracts" target="_blank" rel="noopener">▶ SOURCE</a>` },
     ],
   });
 }
@@ -224,7 +304,7 @@ function docs() {
   });
 }
 
-// ---------- pre-launch draw ----------
+// ---------- $NIMORI draw ----------
 // Connect -> sign one free message -> the server verifies it and stores ONE ticket per wallet.
 // Sharing on X only comes after that, from a real entry.
 const DRAW = { entry: null, players: null, busy: false, rolled: false, error: '' };
@@ -273,7 +353,7 @@ async function refreshDraw() {
 function ticketCard(e, rolling = false) {
   return `
     <div class="gm-ticket ${rolling ? 'rolling' : ''}" data-ticket>
-      <div class="gm-ticket-top"><img src="img/wordmark.webp" alt="NIMORI"><span>PRE-LAUNCH DRAW</span></div>
+      <div class="gm-ticket-top"><img src="img/wordmark.webp" alt="NIMORI"><span>$NIMORI DRAW</span></div>
       <div class="gm-ticket-code" data-code>${rolling ? 'NMR-??????' : e.ticket.code}</div>
       ${dots('WALLET', W.short(e.address))}${dots('CARTRIDGE', e.ticket.cart.toUpperCase())}
     </div>`;
@@ -284,7 +364,7 @@ function draw() {
   const acc = W.account();
   const e = DRAW.entry;
   return gameMenu('draw', {
-    title: 'PRE-LAUNCH DRAW',
+    title: '$NIMORI DRAW',
     status: `PLAYERS <b>${DRAW.players ?? '—'}</b>`,
     items: [
       { label: acc ? 'WALLET ✓' : 'CONNECT', body: () => acc
@@ -305,7 +385,7 @@ function draw() {
           <li><b>ONE WALLET, ONE TICKET.</b> Same odds for every ticket. The cartridge is cosmetic.</li>
           <li><b>ELIGIBILITY.</b> At the snapshot block, a wallet needs at least 1 transaction sent and some ETH for gas on Robinhood Chain. Fresh empty wallets do not count.</li>
           <li><b>VERIFIABLE.</b> Before the draw we publish the full entry list and its hash. The draw script is open source, anyone can re-run it and get the same winners.</li>
-          <li><b>DRAWN AT LAUNCH, IN PUBLIC.</b> From a Robinhood Chain block hash announced in advance: nobody can pick the winners, us included.</li>
+          <li><b>DRAWN IN PUBLIC.</b> From a Robinhood Chain block hash announced in advance: nobody can pick the winners, us included.</li>
           <li><b>WINNERS GET A $NIMORI AIRDROP.</b> Amount and number of winners announced before the draw.</li>
           <li><b>STAY SAFE.</b> The draw never asks for a transaction, an approval or a seed phrase. We never DM first.</li>
         </ol>` },
@@ -400,9 +480,14 @@ const ROUTES = { lobby, arcade, docs, draw };
 // ---------- console screen content (drawn inside the 3D scene, never an HTML overlay) ----------
 function screenFor(route) {
   if (route === 'draw') return DRAW.entry && DRAW.rolled
-    ? { title: 'PRE-LAUNCH DRAW', big: DRAW.entry.ticket.code, lines: ['YOUR TICKET', '1 WALLET · 1 TICKET'] }
-    : { title: 'PRE-LAUNCH DRAW', big: 'PLUG IN', lines: ['GET A TICKET', `${DRAW.players ?? '—'} PLAYERS PLUGGED IN`] };
-  if (route === 'arcade') return { title: 'ARCADE', big: 'SOON', lines: ['STAKING OPENS AT LAUNCH', 'LAUNCHING ON PONS'] };
+    ? { title: '$NIMORI DRAW', big: DRAW.entry.ticket.code, lines: ['YOUR TICKET', '1 WALLET · 1 TICKET'] }
+    : { title: '$NIMORI DRAW', big: 'PLUG IN', lines: ['GET A TICKET', `${DRAW.players ?? '—'} PLAYERS PLUGGED IN`] };
+  if (route === 'arcade') {
+    const s = ARC.s;
+    if (!s) return { title: 'ARCADE', big: 'LIVE', lines: ['STAKE NIMORI · EARN ETH', 'READING CHAIN…'] };
+    if (!s.token) return { title: 'ARCADE', big: 'LIVE', lines: ['CONTRACT DEPLOYED', 'TOKEN BEING SET'] };
+    return { title: 'ARCADE', big: 'STAKE', lines: [tok(s.staked) + ' NIMORI STAKED', s.remaining > 0n ? eth(ethPerDay(s)) + ' ETH / DAY' : 'NEXT ROUND QUEUED'] };
+  }
   return { title: 'HOW TO PLAY', big: '1P + 2P', lines: ['ETH + TOKEN = ONE POSITION', 'THE MOVER CARRIES THE IL'] };
 }
 
@@ -474,6 +559,13 @@ function bind(root) {
   $('[data-wdisconnect]', root)?.addEventListener('click', () => { W.disconnect(); });
   $('[data-wsign]', root)?.addEventListener('click', doSign);
   $('[data-wshare]', root)?.addEventListener('click', shareOnX);
+  $('[data-arc-stake]', root)?.addEventListener('click', doStake);
+  $('[data-arc-withdraw]', root)?.addEventListener('click', doWithdraw);
+  $('[data-arc-claim]', root)?.addEventListener('click', () => arcadeTx('CLAIM', (a) => C.tx.claim(a)));
+  $('[data-arc-exit]', root)?.addEventListener('click', () => arcadeTx('EXIT', (a) => C.tx.exit(a)));
+  $('[data-arc-kick]', root)?.addEventListener('click', () => arcadeTx('NEXT ROUND', (a) => C.tx.kick(a)));
+  $('[data-arc-max]', root)?.addEventListener('click', (e) => { ARC.amount = e.currentTarget.dataset.arcMax; const i = $('[data-arc-amount]', root); if (i) i.value = ARC.amount; });
+  $('[data-arc-amount]', root)?.addEventListener('input', (e) => { ARC.amount = e.target.value; });
 }
 
 function menuPick(i, fromClick = false) {
@@ -515,9 +607,13 @@ document.addEventListener('keydown', (e) => {
 
 $('[data-connect]').addEventListener('click', () => (W.account() ? (location.hash = '#/draw') : openWalletPicker()));
 window.addEventListener('hashchange', render);
+const syncArcade = () => arcadePoll(routeName() === 'arcade');
+window.addEventListener('hashchange', syncArcade);
+W.onChange(() => { if (routeName() === 'arcade') loadArcade(); });
 if (!location.hash) history.replaceState(null, '', '#/lobby');
 document.fonts?.ready.then(() => { const r = routeName(); if (lidOpenFor(r)) scene?.setScreen(screenFor(r)); });
 render();
+syncArcade();
 
 // ---------- arcade click sounds ----------
 // Runs after the element's own handler (bubble phase): if that handler already played a sound, stay quiet.
