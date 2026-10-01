@@ -4,3 +4,5 @@ broadcast/
 .env
 deployment.env
 deployment.fork.env
+.lobby.out.env
+.lobby.deploy.log

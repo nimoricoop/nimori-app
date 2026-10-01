@@ -9,8 +9,16 @@ optimizer_runs = 800
 remappings = [
   "forge-std/=lib/forge-std/src/",
   "@openzeppelin/=lib/openzeppelin-contracts/",
+  "v4-core/=lib/v4-core/",
+  "@uniswap/v4-core/=lib/v4-core/",
+  "v4-periphery/=lib/v4-periphery/",
+  "solmate/=lib/v4-core/lib/solmate/",
 ]
 fs_permissions = [{ access = "read-write", path = "./" }]
+# NimoriLobby only: via-IR keeps it under the EIP-170 size limit (26.2 KB legacy -> ~21.8 KB).
+# The Arcade keeps the default legacy pipeline it was deployed and verified with.
+additional_compiler_profiles = [{ name = "viair", via_ir = true }]
+compilation_restrictions = [{ paths = "src/NimoriLobby.sol", via_ir = true }]
 
 [profile.default.fuzz]
 runs = 512
